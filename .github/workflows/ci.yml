@@ -1,0 +1,125 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: homepoll
+          POSTGRES_PASSWORD: homepoll
+          POSTGRES_DB: homepoll
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U homepoll"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: "1.26"
+      - run: go vet ./...
+      - run: make test-all
+
+  build-push:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: .
+          platforms: linux/arm/v7
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+
+  deploy:
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Deploy Grafana files
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "grafana/provisioning,grafana/dashboards"
+          target: ${{ vars.GRAFANA_PATH }}
+          strip_components: 1
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Non-sensitive config: GitHub repository variables (readable/editable in the UI).
+          POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          ETA_HOST: ${{ vars.ETA_HOST }}
+          ETA_PORT: ${{ vars.ETA_PORT }}
+          POWER_HOST: ${{ vars.POWER_HOST }}
+          # Sensitive: GitHub secrets (write-only).
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POWER_TOKEN: ${{ secrets.POWER_TOKEN }}
+          POWER_GPNR: ${{ secrets.POWER_GPNR }}
+          POWER_ZP: ${{ secrets.POWER_ZP }}
+          GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD
+          script: |
+            # Pull the freshly built image and replace the running container.
+            echo "Updating container..."
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ github.repository }}:latest
+            docker stop homepoll-collector || true
+            docker rm homepoll-collector || true
+            docker run -d --name homepoll-collector \
+              --restart unless-stopped \
+              --network host \
+              -e POSTGRES_HOST \
+              -e POSTGRES_PORT \
+              -e POSTGRES_USER \
+              -e POSTGRES_PASSWORD \
+              -e POSTGRES_DB \
+              -e ETA_HOST \
+              -e ETA_PORT \
+              -e POWER_HOST \
+              -e POWER_TOKEN \
+              -e POWER_GPNR \
+              -e POWER_ZP \
+              ghcr.io/${{ github.repository }}:latest
+
+            # Pick up datasource changes from the scp'd provisioning files (dashboards hot-reload on their own).
+            echo "Reloading Grafana provisioning..."
+            curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
+              http://localhost:3000/api/admin/provisioning/datasources/reload

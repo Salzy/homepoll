@@ -1,0 +1,361 @@
+{
+  "title": "Homepoll - Heater",
+  "uid": "homepoll-heater",
+  "schemaVersion": 39,
+  "editable": true,
+  "timezone": "browser",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "kg_price",
+        "label": "Pellet price (EUR/kg)",
+        "type": "textbox",
+        "query": "0.42",
+        "current": {
+          "text": "0.42",
+          "value": "0.42"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Pellets consumed (kg)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.value_num AS kg FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' ORDER BY m.recorded_at DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Avg pellets/day (kg)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at)), daily AS (SELECT date_trunc('day', recorded_at) AS day, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) AS kg FROM d GROUP BY 1) SELECT avg(kg) AS \"kg/day\" FROM daily"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Full-load runtime (h)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: h",
+          "decimals": 1
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.value_num / 3600.0 AS hours FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'full_load_hours' ORDER BY m.recorded_at DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Heater starts (ignitions)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.value_num AS ignitions FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'ignitions' ORDER BY m.recorded_at DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Cost per day (EUR)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "custom": {
+            "drawStyle": "bars"
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at)) SELECT date_trunc('day', recorded_at) AS time, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) * ${kg_price} AS \"Cost (EUR)\" FROM d GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Pellet consumption (cumulative kg)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"kg\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "state-timeline",
+      "title": "Boiler mode (heating / non-heating)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.recorded_at AS time, m.value_text AS \"mode\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'boiler_mode' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Boiler power - requested (kW)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatt"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"kW\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'requested_power' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Outside temperature (C)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"C\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'outside_temperature' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Buffer charge (%)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"%\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'buffer_charge' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        }
+      ]
+    }
+  ]
+}

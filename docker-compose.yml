@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-homepoll}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-homepoll}
+      POSTGRES_DB: ${POSTGRES_DB:-homepoll}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-homepoll}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-homepoll}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-homepoll}
+      POSTGRES_DB: ${POSTGRES_DB:-homepoll}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - grafanadata:/var/lib/grafana
+
+volumes:
+  pgdata:
+  grafanadata:

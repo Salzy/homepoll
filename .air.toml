@@ -1,0 +1,9 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/collector ./cmd/collector"
+  bin = "./tmp/collector"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "grafana", "docs", ".github"]
+  delay = 500

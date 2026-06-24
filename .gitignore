@@ -1,0 +1,5 @@
+/tmp/
+.env
+*.local
+.claude
+.DS_Store

@@ -15,6 +15,8 @@ type Config struct {
 	PowerToken   string
 	PowerGPNR    string
 	PowerZP      string
+	MCPAddr      string
+	MCPToken     string
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -31,6 +33,8 @@ func Load() Config {
 		PowerToken:   env("POWER_TOKEN", ""),
 		PowerGPNR:    env("POWER_GPNR", ""),
 		PowerZP:      env("POWER_ZP", ""),
+		MCPAddr:      env("MCP_ADDR", ""),
+		MCPToken:     env("MCP_TOKEN", ""),
 	}
 }
 

@@ -85,17 +85,21 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
+          # Empty unless you want the MCP HTTP endpoint; the container uses the
+          # host network, so bind it to loopback or the Tailscale address.
+          MCP_ADDR: ${{ vars.MCP_ADDR }}
           # Sensitive: GitHub secrets (write-only).
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POWER_TOKEN: ${{ secrets.POWER_TOKEN }}
           POWER_GPNR: ${{ secrets.POWER_GPNR }}
           POWER_ZP: ${{ secrets.POWER_ZP }}
           GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
+          MCP_TOKEN: ${{ secrets.MCP_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_ADDR,MCP_TOKEN
           script: |
             # Pull the freshly built image and replace the running container.
             echo "Updating container..."
@@ -117,6 +121,8 @@ jobs:
               -e POWER_TOKEN \
               -e POWER_GPNR \
               -e POWER_ZP \
+              -e MCP_ADDR \
+              -e MCP_TOKEN \
               ghcr.io/${{ github.repository }}:latest
 
             # Pick up datasource changes from the scp'd provisioning files (dashboards hot-reload on their own).

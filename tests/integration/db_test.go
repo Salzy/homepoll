@@ -69,6 +69,16 @@ func TestListConfigurations(t *testing.T) {
 
 	// Representative seeded metrics across both modules and both value types,
 	// so the assertion exercises module-enum, numeric, and text scanning.
+	// description and unit exist only to describe a metric to an MCP client;
+	// nothing in the collector reads them, so this is what keeps their scan honest.
+	if c := byName["boiler_temperature"]; c.Unit.String != "C" || c.Description.String == "" {
+		t.Errorf(
+			"boiler_temperature = {unit:%q description:%q}, want unit C and a non-empty description",
+			c.Unit.String,
+			c.Description.String,
+		)
+	}
+
 	want := []struct {
 		name, module, typ, path string
 	}{
@@ -210,4 +220,125 @@ func TestMetricDedup(t *testing.T) {
 			stored,
 		)
 	}
+}
+
+// TestListReadings exercises the hand-written read query behind the MCP
+// query_metric tool: newest-first ordering, the optional window bounds, the
+// limit, and the scan of both value columns. It runs in a transaction that is
+// rolled back, so it leaves no rows behind.
+func TestListReadings(t *testing.T) {
+	sqlDB := openTestDB(t)
+	defer sqlDB.Close()
+
+	ctx := context.Background()
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback()
+
+	q := db.New(tx)
+	configs, err := q.ListConfigurations(ctx)
+	if err != nil {
+		t.Fatalf("ListConfigurations: %v", err)
+	}
+	byName := make(map[string]db.Configuration, len(configs))
+	for _, c := range configs {
+		byName[c.Name] = c
+	}
+	numeric, ok := byName["boiler_temperature"]
+	if !ok {
+		t.Fatal("seeded metric boiler_temperature is missing")
+	}
+	text, ok := byName["boiler_mode"]
+	if !ok {
+		t.Fatal("seeded metric boiler_mode is missing")
+	}
+
+	// Far enough in the future that these rows are the newest in the table even
+	// when the test runs against the live development database.
+	base := time.Date(2099, 3, 1, 0, 0, 0, 0, time.UTC)
+	at := func(i int) time.Time { return base.Add(time.Duration(i) * 15 * time.Minute) }
+	rows := make([]db.InsertMetricParams, 0, 5)
+	for i := range 4 {
+		rows = append(rows, db.InsertMetricParams{
+			RecordedAt:      at(i),
+			ValueNum:        sql.NullFloat64{Float64: float64(i), Valid: true},
+			ConfigurationID: numeric.ID,
+		})
+	}
+	rows = append(rows, db.InsertMetricParams{
+		RecordedAt:      base,
+		ValueText:       sql.NullString{String: "Heizen", Valid: true},
+		ConfigurationID: text.ID,
+	})
+	if err := q.InsertMetrics(ctx, rows); err != nil {
+		t.Fatalf("seed readings: %v", err)
+	}
+
+	t.Run("should return the newest readings first, honouring the limit", func(t *testing.T) {
+		got, err := q.ListReadings(ctx, db.ListReadingsParams{
+			ConfigurationID: numeric.ID,
+			Limit:           2,
+		})
+		if err != nil {
+			t.Fatalf("ListReadings: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d readings, want 2", len(got))
+		}
+		if !got[0].RecordedAt.Equal(at(3)) || !got[1].RecordedAt.Equal(at(2)) {
+			t.Errorf("readings = %v, %v, want %v, %v then descending",
+				got[0].RecordedAt, got[1].RecordedAt, at(3), at(2))
+		}
+		if got[0].ValueNum.Float64 != 3 {
+			t.Errorf("newest value = %v, want 3", got[0].ValueNum.Float64)
+		}
+	})
+
+	t.Run("should keep both window bounds inclusive", func(t *testing.T) {
+		got, err := q.ListReadings(ctx, db.ListReadingsParams{
+			ConfigurationID: numeric.ID,
+			From:            sql.NullTime{Time: at(1), Valid: true},
+			To:              sql.NullTime{Time: at(2), Valid: true},
+			Limit:           100,
+		})
+		if err != nil {
+			t.Fatalf("ListReadings: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d readings in [at(1), at(2)], want 2 (bounds are inclusive)", len(got))
+		}
+	})
+
+	t.Run("should leave the other side open when only one bound is set", func(t *testing.T) {
+		got, err := q.ListReadings(ctx, db.ListReadingsParams{
+			ConfigurationID: numeric.ID,
+			From:            sql.NullTime{Time: at(2), Valid: true},
+			Limit:           100,
+		})
+		if err != nil {
+			t.Fatalf("ListReadings: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d readings from at(2) onwards, want 2", len(got))
+		}
+	})
+
+	t.Run("should scan a text metric into value_text", func(t *testing.T) {
+		got, err := q.ListReadings(ctx, db.ListReadingsParams{
+			ConfigurationID: text.ID,
+			From:            sql.NullTime{Time: base, Valid: true},
+			Limit:           1,
+		})
+		if err != nil {
+			t.Fatalf("ListReadings: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("got %d readings, want 1", len(got))
+		}
+		if got[0].ValueNum.Valid || got[0].ValueText.String != "Heizen" {
+			t.Errorf("reading = %+v, want value_text Heizen and a NULL value_num", got[0])
+		}
+	})
 }

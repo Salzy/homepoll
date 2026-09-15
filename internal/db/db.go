@@ -43,15 +43,19 @@ func New(db DBTX) *Queries {
 // Configuration is one row of the configuration table: the definition of a
 // single metric to collect.
 type Configuration struct {
-	ID           int32
+	Description  sql.NullString
+	Unit         sql.NullString
 	Module       string
 	Name         string
 	Path         string
 	Type         string
+	ID           int32
 	PollInterval int32
 }
 
-const listConfigurations = `SELECT id, module, name, path, type, poll_interval FROM configuration`
+const listConfigurations = `SELECT id, module, name, description, unit, path, type, poll_interval
+FROM configuration
+ORDER BY module, name`
 
 // ListConfigurations returns every configured metric.
 //
@@ -72,6 +76,8 @@ func (q *Queries) ListConfigurations(ctx context.Context) ([]Configuration, erro
 			&c.ID,
 			&c.Module,
 			&c.Name,
+			&c.Description,
+			&c.Unit,
 			&c.Path,
 			&c.Type,
 			&c.PollInterval,
@@ -130,4 +136,58 @@ func buildInsertMetrics(rows int) string {
 	}
 	b.WriteString(" ON CONFLICT (configuration_id, recorded_at) DO NOTHING")
 	return b.String()
+}
+
+// Reading is one stored value of a metric. Exactly one of ValueNum/ValueText is
+// set, according to the metric's configuration.type.
+type Reading struct {
+	RecordedAt time.Time
+	ValueNum   sql.NullFloat64
+	ValueText  sql.NullString
+}
+
+// ListReadingsParams selects the readings to return: one metric, optionally
+// narrowed to a time window. An invalid From/To is simply left unset (NULL),
+// which the statement treats as "unbounded on that side".
+type ListReadingsParams struct {
+	From            sql.NullTime
+	To              sql.NullTime
+	ConfigurationID int32
+	Limit           int32
+}
+
+// Newest first, so a limit of 1 is "the current value". The window bounds are
+// optional: a NULL bound drops that side of the comparison. Filtering and
+// ordering both ride the (configuration_id, recorded_at) primary key.
+const listReadings = `SELECT recorded_at, value_num, value_text FROM metric
+WHERE configuration_id = $1
+  AND ($2::timestamptz IS NULL OR recorded_at >= $2)
+  AND ($3::timestamptz IS NULL OR recorded_at <= $3)
+ORDER BY recorded_at DESC
+LIMIT $4`
+
+// ListReadings returns the stored readings of a single metric, newest first.
+//
+// Parameters:
+//   - ctx: cancellation/deadline for the query.
+//   - arg: the metric, optional time window, and maximum number of rows.
+//
+// Returns the readings, or an error if the query or a row scan fails.
+func (q *Queries) ListReadings(ctx context.Context, arg ListReadingsParams) ([]Reading, error) {
+	rows, err := q.db.QueryContext(
+		ctx, listReadings, arg.ConfigurationID, arg.From, arg.To, arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reading
+	for rows.Next() {
+		var r Reading
+		if err := rows.Scan(&r.RecordedAt, &r.ValueNum, &r.ValueText); err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return items, rows.Err()
 }

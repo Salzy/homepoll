@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -14,6 +17,7 @@ import (
 	"homepoll/internal/config"
 	"homepoll/internal/db"
 	"homepoll/internal/eta"
+	"homepoll/internal/mcp"
 	"homepoll/internal/mock"
 	"homepoll/internal/power"
 )
@@ -26,6 +30,22 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer sqlDB.Close()
+
+	// With no arguments this is the collector. `collector mcp` instead serves
+	// the stored metrics to an MCP client over stdio and exits when the client
+	// closes the pipe: read-only, and never migrating, because the collecting
+	// mode owns the schema. One binary so both modes share the same DSN.
+	if len(os.Args) > 1 {
+		if os.Args[1] != "mcp" {
+			log.Fatalf("usage: %s [mcp]", os.Args[0])
+		}
+		// stdout carries the protocol, so nothing may be printed to it. The
+		// standard logger writes to stderr, which MCP clients show as the log.
+		if err := mcp.Serve(context.Background(), db.New(sqlDB), os.Stdin, os.Stdout); err != nil {
+			log.Fatalf("serve: %v", err)
+		}
+		return
+	}
 
 	if err := migrate(sqlDB); err != nil {
 		log.Fatalf("migrate: %v", err)
@@ -76,9 +96,37 @@ func main() {
 		}
 	}
 
+	serveMCP(cfg, queries)
+
 	log.Printf("collecting %d metrics across %d modules", len(configs), len(fetchers))
 	collector.Run(ctx, queries, configs, fetchers)
 	log.Println("shutting down")
+}
+
+// serveMCP starts the MCP HTTP transport alongside the pollers when MCP_ADDR is
+// set, for clients that cannot spawn the stdio mode - a hosted assistant, or
+// one on another machine. Unset, nothing listens and the deployment publishes
+// no port, as before.
+//
+// The endpoint is plain HTTP: bind MCP_ADDR to loopback or to the host's
+// Tailscale address and let that layer carry the encryption and device
+// identity. The bearer token is what stops anyone already on that network.
+func serveMCP(cfg config.Config, queries *db.Queries) {
+	if cfg.MCPAddr == "" {
+		return
+	}
+	if cfg.MCPToken == "" {
+		log.Fatalf("MCP_ADDR is set but MCP_TOKEN is not; the endpoint would be unauthenticated")
+	}
+	srv := &http.Server{
+		Addr:              cfg.MCPAddr,
+		Handler:           mcp.Handler(queries, cfg.MCPToken),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		log.Printf("serving MCP over HTTP on %s%s", cfg.MCPAddr, mcp.Path)
+		log.Fatalf("mcp http: %v", srv.ListenAndServe())
+	}()
 }
 
 // migrate applies the embedded goose migrations against the open database.

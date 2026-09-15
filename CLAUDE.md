@@ -4,7 +4,7 @@ Modular metrics collector for the home. Each external system is a self-contained
 
 ## Tech stack
 
-1. GoLang 1.26.4
+1. GoLang 1.27.1
     1. `air` (developer experience, live reload)
     2. `goose` (migrations, embedded and applied on startup); hand-written `database/sql` for data access
     3. Standard library for everything else (HTTP, XML/JSON, scheduling, configuration)

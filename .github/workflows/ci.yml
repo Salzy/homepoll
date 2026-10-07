@@ -53,7 +53,9 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/salzy/homepoll:latest
+          tags: |
+            ghcr.io/salzy/homepoll:latest
+            ghcr.io/salzy/homepoll:${{ github.sha }}
 
   deploy:
     needs: build-push
@@ -108,7 +110,8 @@ jobs:
           script: |
             echo "Updating container..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/salzy/homepoll:latest
+            # The commit's own tag, not latest: deploys exactly this build.
+            docker pull ghcr.io/salzy/homepoll:${{ github.sha }}
             docker stop homepoll-collector || true
             docker rm homepoll-collector || true
             docker run -d --name homepoll-collector \
@@ -127,7 +130,7 @@ jobs:
               -e POWER_ZP \
               -e MCP_ADDR \
               -e MCP_TOKEN \
-              ghcr.io/salzy/homepoll:latest
+              ghcr.io/salzy/homepoll:${{ github.sha }}
 
             # Dashboards hot-reload; datasources need an explicit reload.
             echo "Reloading Grafana provisioning..."

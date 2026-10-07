@@ -324,3 +324,22 @@ func TestListReadings(t *testing.T) {
 		}
 	})
 }
+
+// TestConfigurationTypeCheck checks the database rejects an unknown type. Rolled back.
+func TestConfigurationTypeCheck(t *testing.T) {
+	sqlDB := openTestDB(t)
+	defer sqlDB.Close()
+
+	ctx := context.Background()
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `INSERT INTO configuration (module, name, path, type, poll_interval)
+VALUES ('HEATER', 'type_check_probe', '/x', 'numerc', 60)`)
+	if err == nil {
+		t.Error("inserted a configuration with type 'numerc', want a CHECK violation")
+	}
+}

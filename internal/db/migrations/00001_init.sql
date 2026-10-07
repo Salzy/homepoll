@@ -12,7 +12,9 @@ CREATE TABLE configuration (
   description text,
   unit varchar(32),
   path varchar(256) NOT NULL,
-  type varchar(32) NOT NULL,
+  -- The collector stores anything but 'numeric' as text, so a typo here would
+  -- silently turn a numeric metric into text.
+  type varchar(32) NOT NULL CHECK (type IN ('numeric', 'text')),
   poll_interval integer NOT NULL,
   UNIQUE (module, name)
 );

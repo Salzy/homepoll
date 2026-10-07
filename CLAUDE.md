@@ -4,7 +4,8 @@ Modular home metrics collector (Go 1.27.1, PostgreSQL 18, Grafana). Usage, modul
 
 ## Stack
 
-- Go standard library for HTTP, XML/JSON, scheduling, config; hand-written `database/sql`; `goose` migrations; `air` for live reload.
+- Go standard library for HTTP, XML/JSON, scheduling, config; hand-written `database/sql`; `goose` migrations.
+- `mise.toml` pins Go and the dev tools (`air`, `golines`, `goose`); the `Makefile` calls them directly.
 - Distroless Docker image, Docker Compose for local dependencies, GitHub Actions for CI/CD.
 
 ## Layout

@@ -11,7 +11,7 @@ Salzburg Netz (HTTPS/JSON) --->        |
 ## Quick start
 
 ```bash
-go mod tidy            # writes go.sum
+mise install           # Go + air, golines, goose (mise.toml)
 make up                # PostgreSQL + Grafana
 DRY_RUN=true make dev  # mock data, no external systems
 ```

@@ -1,2 +1,5 @@
 [tools]
 go = "1.27.1"
+air = "1.67.4"
+golines = "0.13.0"
+"aqua:pressly/goose" = "3.28.0"

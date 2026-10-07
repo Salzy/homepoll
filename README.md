@@ -30,7 +30,7 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 | Module   | System                   | Fetch                                                                | Docs                                                                                                                                    |
 | -------- | ------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEATER` | ETA ePE 9kW (ETAtouch)   | `GET /user/var<path>`, one value per call                            | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0)                    |
-| `POWER`  | Salzburg Netz grid meter | `POST /api/v1/profile`, previous day of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
+| `POWER`  | Salzburg Netz grid meter | `POST /api/v1/profile`, last 7 days of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
 | `MOCK`   | -                        | `DRY_RUN=true` replaces every module with random values              | -                                                                                                                                       |
 
 **HEATER**
@@ -43,7 +43,7 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 **POWER**
 
 - `path` is the OBIS series id `1-1:1.9.0`; account and meter come from `POWER_GPNR` / `POWER_ZP` (Salzburg Netz portal).
-- Re-fetching a day is idempotent (`ON CONFLICT DO NOTHING`).
+- Each fetch re-requests the last 7 days, so a failed or incomplete day fills in on a later run (`ON CONFLICT DO NOTHING` keeps it idempotent).
 
 | Metric                                              | Module | Unit | Interval (s) |
 | --------------------------------------------------- | ------ | ---- | ------------ |

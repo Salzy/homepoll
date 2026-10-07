@@ -22,6 +22,14 @@ func TestRecordTime(t *testing.T) {
 	}
 }
 
+func TestWindow(t *testing.T) {
+	// 23:30 UTC on 2026-06-21 is already 2026-06-22 in Vienna.
+	from, to := window(time.Date(2026, 6, 21, 23, 30, 0, 0, time.UTC))
+	if from != "2026-06-15" || to != "2026-06-21" {
+		t.Errorf("window = %s..%s, want 2026-06-15..2026-06-21", from, to)
+	}
+}
+
 func TestFetch(t *testing.T) {
 	const responseBody = `[
 	  {"Datum":"21.06.2026","Uhrzeit":"00:00:00","UTC":"+2","Wert":"0,086","Einheit":"kWh"},
@@ -38,7 +46,9 @@ func TestFetch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	readings, err := Fetch(context.Background(), srv.URL, "tok", "10745740", "AT00ZP", "2026-06-21")
+	readings, err := Fetch(
+		context.Background(), srv.URL, "tok", "10745740", "AT00ZP", "2026-06-14", "2026-06-21",
+	)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -53,7 +63,7 @@ func TestFetch(t *testing.T) {
 		t.Errorf("Authorization = %q", gotAuth)
 	}
 	want := map[string]string{
-		"GPNR": "10745740", "ZP": "AT00ZP", "AB": "2026-06-21", "BIS": "2026-06-21", "FORMAT": "json",
+		"GPNR": "10745740", "ZP": "AT00ZP", "AB": "2026-06-14", "BIS": "2026-06-21", "FORMAT": "json",
 	}
 	for k, v := range want {
 		if gotBody[k] != v {
@@ -64,11 +74,11 @@ func TestFetch(t *testing.T) {
 	if len(readings) != 2 {
 		t.Fatalf("got %d readings, want 2", len(readings))
 	}
-	if readings[0].Value != "0,086" {
+	if readings[0].Value != "0.086" {
 		t.Errorf(
-			"readings[0].Value = %q, want %q (comma decimal preserved)",
+			"readings[0].Value = %q, want %q (comma decimal normalized)",
 			readings[0].Value,
-			"0,086",
+			"0.086",
 		)
 	}
 	if u := readings[1].RecordedAt.UTC(); !u.Equal(time.Date(2026, 6, 20, 22, 15, 0, 0, time.UTC)) {
@@ -82,7 +92,9 @@ func TestFetchStatusError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), srv.URL, "tok", "10745740", "AT00ZP", "2026-06-21")
+	_, err := Fetch(
+		context.Background(), srv.URL, "tok", "10745740", "AT00ZP", "2026-06-21", "2026-06-21",
+	)
 	if err == nil {
 		t.Error("Fetch: expected error on 401 status, got nil")
 	}

@@ -36,11 +36,9 @@ func Run(
 
 	var wg sync.WaitGroup
 	for interval, group := range groups {
-		wg.Add(1)
-		go func(interval int32, group []db.Configuration) {
-			defer wg.Done()
+		wg.Go(func() {
 			poll(ctx, q, group, time.Duration(interval)*time.Second, fetchers)
-		}(interval, group)
+		})
 	}
 	wg.Wait()
 }
@@ -104,7 +102,7 @@ func row(cfg db.Configuration, r Reading, now time.Time) db.InsertMetricParams {
 	}
 	arg := db.InsertMetricParams{ConfigurationID: cfg.ID, RecordedAt: at}
 	if cfg.Type == "numeric" {
-		if f, err := parseNumeric(r.Value); err == nil {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(r.Value), 64); err == nil {
 			arg.ValueNum = sql.NullFloat64{Float64: f, Valid: true}
 			return arg
 		}
@@ -112,11 +110,4 @@ func row(cfg db.Configuration, r Reading, now time.Time) db.InsertMetricParams {
 	}
 	arg.ValueText = sql.NullString{String: r.Value, Valid: true}
 	return arg
-}
-
-// parseNumeric parses a number, accepting a comma decimal separator (POWER).
-func parseNumeric(s string) (float64, error) {
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, ",", ".")
-	return strconv.ParseFloat(s, 64)
 }

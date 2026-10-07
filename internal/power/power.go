@@ -1,5 +1,5 @@
-// Package power fetches a day of 15-minute grid consumption samples from the
-// Salzburg Netz API.
+// Package power fetches 15-minute grid consumption samples from the Salzburg
+// Netz API.
 package power
 
 import (
@@ -20,6 +20,13 @@ import (
 
 var client = &http.Client{Timeout: 30 * time.Second}
 
+// backfillDays is how many past days every fetch re-requests. Inserts are
+// idempotent, so a failed or incomplete day is filled in by a later run.
+// Verified against the Salzburg Netz API description (2026-10-07): a request
+// may span up to three years, data updates once a day, and more than 90% of a
+// day is available by 10-12h, so yesterday is often incomplete on first fetch.
+const backfillDays = 7
+
 // profileRecord is one 15-minute sample; only stored fields are decoded.
 type profileRecord struct {
 	Datum   string `json:"Datum"`   // dd.mm.yyyy
@@ -28,21 +35,23 @@ type profileRecord struct {
 	Wert    string `json:"Wert"`    // value, comma decimal separator
 }
 
-// Fetcher returns a collector.Fetch for the previous day; the configuration is
-// unused (one metering point per deployment).
+// Fetcher returns a collector.Fetch for the last backfillDays days up to
+// yesterday; the configuration is unused (one metering point per deployment).
 func Fetcher(baseURL, token, gpnr, zp string) collector.Fetch {
 	return func(ctx context.Context, _ db.Configuration) ([]collector.Reading, error) {
-		return Fetch(ctx, baseURL, token, gpnr, zp, yesterday(time.Now()))
+		from, to := window(time.Now())
+		return Fetch(ctx, baseURL, token, gpnr, zp, from, to)
 	}
 }
 
-// Fetch returns one reading per 15-minute interval of day ("yyyy-mm-dd").
+// Fetch returns one reading per 15-minute interval from day from to day to,
+// both inclusive ("yyyy-mm-dd").
 func Fetch(
 	ctx context.Context,
-	baseURL, token, gpnr, zp, day string,
+	baseURL, token, gpnr, zp, from, to string,
 ) ([]collector.Reading, error) {
 	body, err := json.Marshal(map[string]string{
-		"GPNR": gpnr, "ZP": zp, "AB": day, "BIS": day, "FORMAT": "json",
+		"GPNR": gpnr, "ZP": zp, "AB": from, "BIS": to, "FORMAT": "json",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("power: marshal request: %w", err)
@@ -72,7 +81,8 @@ func Fetch(
 	return readings(records)
 }
 
-// readings converts decoded profile records into timestamped readings.
+// readings converts decoded profile records into timestamped readings with a
+// dot decimal separator.
 func readings(records []profileRecord) ([]collector.Reading, error) {
 	out := make([]collector.Reading, 0, len(records))
 	for _, r := range records {
@@ -80,7 +90,10 @@ func readings(records []profileRecord) ([]collector.Reading, error) {
 		if err != nil {
 			return nil, fmt.Errorf("power: %w", err)
 		}
-		out = append(out, collector.Reading{Value: r.Wert, RecordedAt: at})
+		out = append(out, collector.Reading{
+			Value:      strings.ReplaceAll(r.Wert, ",", "."),
+			RecordedAt: at,
+		})
 	}
 	return out, nil
 }
@@ -96,9 +109,12 @@ func recordTime(datum, uhrzeit, utc string) (time.Time, error) {
 	return time.ParseInLocation("02.01.2006 15:04:05", datum+" "+uhrzeit, loc)
 }
 
-// yesterday returns the previous day in Austria as "yyyy-mm-dd".
-func yesterday(now time.Time) string {
+// window returns the first and last day to fetch in Austria as "yyyy-mm-dd":
+// backfillDays days ago through yesterday.
+func window(now time.Time) (from, to string) {
 	// ponytail: tzdata is embedded, so LoadLocation with a constant name can't fail.
 	loc, _ := time.LoadLocation("Europe/Vienna")
-	return now.In(loc).AddDate(0, 0, -1).Format("2006-01-02")
+	today := now.In(loc)
+	return today.AddDate(0, 0, -backfillDays).Format(time.DateOnly),
+		today.AddDate(0, 0, -1).Format(time.DateOnly)
 }

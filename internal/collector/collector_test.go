@@ -9,24 +9,16 @@ import (
 	"homepoll/internal/db"
 )
 
-func TestParseNumeric(t *testing.T) {
-	cases := map[string]float64{
-		"22.7": 22.7,
-		"1,80": 1.80,
-		" 9 ":  9,
-		"0":    0,
+func TestRow(t *testing.T) {
+	numeric := db.Configuration{ID: 1, Name: "boiler_temperature", Type: "numeric"}
+	if got := row(numeric, Reading{Value: " 22.7 "}, time.Now()); got.ValueNum.Float64 != 22.7 ||
+		got.ValueText.Valid {
+		t.Errorf("row(numeric, 22.7) = %+v, want ValueNum 22.7 and no text", got)
 	}
-	for in, want := range cases {
-		got, err := parseNumeric(in)
-		if err != nil {
-			t.Fatalf("parseNumeric(%q): %v", in, err)
-		}
-		if got != want {
-			t.Errorf("parseNumeric(%q) = %v, want %v", in, got, want)
-		}
-	}
-	if _, err := parseNumeric("Heizen"); err == nil {
-		t.Errorf("parseNumeric(%q): expected error for non-numeric input", "Heizen")
+	// A numeric metric that reads non-numeric falls back to text, not a dropped row.
+	if got := row(numeric, Reading{Value: "Heizen"}, time.Now()); got.ValueNum.Valid ||
+		got.ValueText.String != "Heizen" {
+		t.Errorf("row(numeric, Heizen) = %+v, want text fallback", got)
 	}
 }
 

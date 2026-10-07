@@ -1,6 +1,5 @@
-// Package db is the hand-written data access layer: a thin wrapper over
-// database/sql for the two statements this service runs - list configurations
-// and batch-insert metrics - plus the embedded goose migrations (migrations.go).
+// Package db is the hand-written database/sql access layer plus the embedded
+// goose migrations.
 package db
 
 import (
@@ -11,15 +10,8 @@ import (
 	"time"
 )
 
-// DBTX is the subset of *sql.DB and *sql.Tx the queries call, so a Queries can
-// run against either. We need both:
-//   - *sql.DB (the pool): production and normal reads.
-//   - *sql.Tx (a transaction): the integration tests run inside one and roll it
-//     back, exercising the real SQL while leaving no rows behind.
-//
-// They are distinct concrete types with no shared interface in the standard
-// library, so we declare this one to write code generic over both. (A fake also
-// satisfies it, which lets the collector be unit-tested with no database.)
+// DBTX is satisfied by *sql.DB, *sql.Tx (integration tests roll back) and test
+// fakes.
 type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -40,8 +32,7 @@ func New(db DBTX) *Queries {
 	return &Queries{db: db}
 }
 
-// Configuration is one row of the configuration table: the definition of a
-// single metric to collect.
+// Configuration is one row of the configuration table: one metric to collect.
 type Configuration struct {
 	Description  sql.NullString
 	Unit         sql.NullString
@@ -97,8 +88,7 @@ type InsertMetricParams struct {
 	ConfigurationID int32
 }
 
-// InsertMetrics writes many readings in a single multi-row INSERT, so a whole
-// batch (for example a day of POWER samples) costs one round trip.
+// InsertMetrics writes all readings in one multi-row INSERT.
 //
 // Parameters:
 //   - ctx: cancellation/deadline for the statement.
@@ -117,11 +107,8 @@ func (q *Queries) InsertMetrics(ctx context.Context, args []InsertMetricParams) 
 	return err
 }
 
-// buildInsertMetrics builds the multi-row INSERT statement with positional
-// placeholders for the given number of rows. ON CONFLICT DO NOTHING makes
-// re-fetching the same data idempotent (the POWER module re-reads the previous
-// day on every restart); it relies on the primary key over
-// (configuration_id, recorded_at).
+// buildInsertMetrics builds the INSERT for the given row count. ON CONFLICT DO
+// NOTHING on the primary key makes re-fetching idempotent.
 func buildInsertMetrics(rows int) string {
 	var b strings.Builder
 	b.WriteString(
@@ -138,17 +125,14 @@ func buildInsertMetrics(rows int) string {
 	return b.String()
 }
 
-// Reading is one stored value of a metric. Exactly one of ValueNum/ValueText is
-// set, according to the metric's configuration.type.
+// Reading is one stored value; ValueNum or ValueText is set per configuration.type.
 type Reading struct {
 	RecordedAt time.Time
 	ValueNum   sql.NullFloat64
 	ValueText  sql.NullString
 }
 
-// ListReadingsParams selects the readings to return: one metric, optionally
-// narrowed to a time window. An invalid From/To is simply left unset (NULL),
-// which the statement treats as "unbounded on that side".
+// ListReadingsParams selects one metric's readings; a NULL From/To is unbounded.
 type ListReadingsParams struct {
 	From            sql.NullTime
 	To              sql.NullTime
@@ -156,9 +140,7 @@ type ListReadingsParams struct {
 	Limit           int32
 }
 
-// Newest first, so a limit of 1 is "the current value". The window bounds are
-// optional: a NULL bound drops that side of the comparison. Filtering and
-// ordering both ride the (configuration_id, recorded_at) primary key.
+// Newest first, so LIMIT 1 is the current value. Served by the primary key.
 const listReadings = `SELECT recorded_at, value_num, value_text FROM metric
 WHERE configuration_id = $1
   AND ($2::timestamptz IS NULL OR recorded_at >= $2)

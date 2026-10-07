@@ -10,8 +10,7 @@ import (
 	"homepoll/internal/db"
 )
 
-// valueXML wraps a <value> element in the ETAtouch envelope (with the xmlns the
-// real heater sends, which parsing must tolerate).
+// valueXML wraps a <value> element in the real ETAtouch envelope, xmlns included.
 func valueXML(attrs, body string) string {
 	return `<eta version="1.0" xmlns="http://www.eta.co.at/rest/v1">` +
 		`<value uri="/x" ` + attrs + `>` + body + `</value></eta>`
@@ -49,9 +48,7 @@ func TestFetchStatusError(t *testing.T) {
 	}
 }
 
-// TestDecode covers the value extraction against the real wire formats observed
-// from the heater: the numeric value is the element body divided by scaleFactor,
-// not the rounded/humanized strValue.
+// TestDecode uses real heater wire formats: number = body / scaleFactor.
 func TestDecode(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -123,9 +120,7 @@ func TestDecode(t *testing.T) {
 	}
 }
 
-// TestFetcher checks the end-to-end dispatch: numeric metrics store the scaled
-// number, text metrics store strValue, and an unavailable numeric reading
-// ("xxx") yields no reading rather than a bogus value.
+// TestFetcher: numeric stores the scaled number, text stores strValue, "xxx" is skipped.
 func TestFetcher(t *testing.T) {
 	responses := map[string]string{
 		"/user/var/num": valueXML(`strValue="557" scaleFactor="10"`, "5573"),

@@ -12,22 +12,16 @@ import (
 	"homepoll/internal/db"
 )
 
-// Reading is one value to store for a metric. RecordedAt is the instant the
-// value applies to; the zero value means "now" (used by point-in-time sources
-// like the heater). Historical sources (such as POWER) set it explicitly.
+// Reading is one value to store. A zero RecordedAt means now.
 type Reading struct {
 	Value      string
 	RecordedAt time.Time
 }
 
-// Fetch retrieves the readings for a configured metric. Point-in-time sources
-// return a single reading; sources that return a batch of timestamped samples
-// (for example a daily power profile) return many.
+// Fetch retrieves the readings for one configured metric.
 type Fetch func(context.Context, db.Configuration) ([]Reading, error)
 
-// Run groups the configurations by poll interval, starts one poller per
-// distinct interval, and blocks until ctx is cancelled. Each metric is fetched
-// by the Fetch registered for its module in fetchers.
+// Run polls each interval group with its module's Fetch until ctx is cancelled.
 // ponytail: one ticker per distinct interval. Fine for a handful of intervals.
 func Run(
 	ctx context.Context,
@@ -73,8 +67,7 @@ func poll(
 	}
 }
 
-// collect fetches every metric in the group, dispatching to the fetcher for its
-// module, and writes all readings in a single batched insert.
+// collect fetches every metric in the group and inserts all readings at once.
 func collect(
 	ctx context.Context,
 	q *db.Queries,
@@ -103,8 +96,7 @@ func collect(
 	}
 }
 
-// row builds an insert row from a reading, choosing the numeric or text column
-// based on the configured type. A zero RecordedAt defaults to now.
+// row maps a reading to the numeric or text column per the configured type.
 func row(cfg db.Configuration, r Reading, now time.Time) db.InsertMetricParams {
 	at := r.RecordedAt
 	if at.IsZero() {
@@ -122,8 +114,7 @@ func row(cfg db.Configuration, r Reading, now time.Time) db.InsertMetricParams {
 	return arg
 }
 
-// parseNumeric parses a reading's string value, tolerating a comma decimal
-// separator (used by the POWER API; ETA numeric values arrive dot-formatted).
+// parseNumeric parses a number, accepting a comma decimal separator (POWER).
 func parseNumeric(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, ",", ".")

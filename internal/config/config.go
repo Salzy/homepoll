@@ -38,8 +38,7 @@ func Load() Config {
 	}
 }
 
-// dsn builds a PostgreSQL DSN (Data Source Name - the connection string passed
-// to sql.Open) from the POSTGRES_* variables.
+// dsn builds the PostgreSQL connection string from the POSTGRES_* variables.
 func dsn() string {
 	u := url.URL{
 		Scheme: "postgres",

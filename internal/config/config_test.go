@@ -6,8 +6,7 @@ import (
 )
 
 func TestDSNDefaults(t *testing.T) {
-	// Clear POSTGRES_* so env() falls back to the documented defaults,
-	// independent of the ambient environment.
+	// Clear POSTGRES_* so the defaults apply.
 	for _, k := range []string{
 		"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST",
 		"POSTGRES_PORT", "POSTGRES_DB", "POSTGRES_SSLMODE",
@@ -21,8 +20,7 @@ func TestDSNDefaults(t *testing.T) {
 }
 
 func TestDSNEscapesCredentials(t *testing.T) {
-	// url.URL is used precisely so credentials containing URL-special characters
-	// are escaped; a naive string concat would corrupt the DSN here.
+	// Credentials with URL-special characters must be escaped.
 	t.Setenv("POSTGRES_PASSWORD", "p@ss:w/rd")
 	u, err := url.Parse(Load().DSN)
 	if err != nil {

@@ -15,38 +15,30 @@ import (
 	"homepoll/internal/db"
 )
 
-// Value is the decoded <value> element from the ETAtouch /user/var endpoint.
-// Str is the heater-formatted display string (for example "22.7", "Heizen",
-// "193h 6m", or the "xxx" sentinel for an unavailable reading). Num is the raw
-// element body scaled by scaleFactor; NumOK is false when the value is
-// unavailable - either the "xxx" sentinel or a non-numeric body.
+// Value is a decoded <value> element: Str is the display string, Num the scaled
+// body. NumOK is false when unavailable ("xxx" or a non-numeric body).
 type Value struct {
 	Str   string
 	Num   float64
 	NumOK bool
 }
 
-// etaValue mirrors the <value> element attributes and body we care about. The
-// element body holds the true number; strValue is only a localized display form.
+// etaValue mirrors <value>; the body holds the true number, strValue is display only.
 type etaValue struct {
 	StrValue    string `xml:"strValue,attr"`
 	ScaleFactor string `xml:"scaleFactor,attr"`
 	Raw         string `xml:",chardata"`
 }
 
-// etaResponse mirrors the <eta> root element of an ETAtouch variable response.
+// etaResponse mirrors the <eta> root element.
 type etaResponse struct {
 	Value etaValue `xml:"value"`
 }
 
 var client = &http.Client{Timeout: 10 * time.Second}
 
-// Fetcher returns a collector.Fetch bound to the given ETA base URL (for
-// example "http://192.168.1.142:8080"). The heater is a point-in-time source,
-// so each call yields a single reading stamped with the current time. Numeric
-// metrics store the scaled raw value; text metrics store the formatted string.
-// An unavailable numeric reading (the "xxx" sentinel or a non-numeric body) is
-// skipped so it leaves a gap rather than text in a numeric series.
+// Fetcher returns a collector.Fetch for the heater at baseURL, yielding one
+// current reading. An unavailable numeric value is skipped, leaving a gap.
 func Fetcher(baseURL string) collector.Fetch {
 	return func(ctx context.Context, cfg db.Configuration) ([]collector.Reading, error) {
 		v, err := Fetch(ctx, baseURL, cfg.Path)
@@ -90,10 +82,8 @@ func Fetch(ctx context.Context, baseURL, path string) (Value, error) {
 	return decode(r.Value), nil
 }
 
-// decode turns a raw <value> element into a Value, scaling the element body by
-// scaleFactor (default 1). NumOK is left false when the value is unavailable:
-// the heater signals this with strValue "xxx" (the element body may still hold a
-// stale 0, so the sentinel is the authority), or with a non-numeric body.
+// decode scales the body by scaleFactor (default 1). strValue "xxx" wins over
+// the body, which may hold a stale 0.
 func decode(v etaValue) Value {
 	out := Value{Str: strings.TrimSpace(v.StrValue)}
 	if out.Str == "xxx" {

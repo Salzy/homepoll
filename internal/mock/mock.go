@@ -10,8 +10,7 @@ import (
 	"homepoll/internal/db"
 )
 
-// Mock generates plausible heater values so the dashboard can be exercised
-// without a real heater (DRY_RUN=true).
+// Mock generates plausible values for every module when DRY_RUN=true.
 type Mock struct {
 	mu       sync.Mutex
 	counters map[string]float64
@@ -22,8 +21,7 @@ func New() *Mock {
 	return &Mock{counters: map[string]float64{}}
 }
 
-// Fetcher adapts Value to the collector's fetch signature, returning a single
-// current reading per call.
+// Fetcher adapts Value to a collector.Fetch returning one current reading.
 func (m *Mock) Fetcher() collector.Fetch {
 	return func(_ context.Context, cfg db.Configuration) ([]collector.Reading, error) {
 		value, err := m.Value(cfg)
@@ -34,8 +32,7 @@ func (m *Mock) Fetcher() collector.Fetch {
 	}
 }
 
-// Value returns a generated value for the given configuration. Monotonic
-// counters increase on every call; gauges vary within a realistic range.
+// Value returns a generated value: counters increase, gauges vary in range.
 // ponytail: counters reset on restart; seed from the database if continuity matters.
 func (m *Mock) Value(cfg db.Configuration) (string, error) {
 	switch cfg.Name {

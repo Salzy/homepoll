@@ -1,7 +1,5 @@
-// Package power fetches grid electricity consumption from the Salzburg Netz
-// REST API (https://api.salzburgnetz.at). One request returns a full day of
-// load-profile samples in 15-minute intervals, so a fetch yields many
-// timestamped readings rather than a single current value.
+// Package power fetches a day of 15-minute grid consumption samples from the
+// Salzburg Netz API.
 package power
 
 import (
@@ -22,9 +20,7 @@ import (
 
 var client = &http.Client{Timeout: 30 * time.Second}
 
-// profileRecord is one 15-minute load-profile sample as returned by the API.
-// Only the fields we store are decoded; the rest (OBIS code, quality, etc.) are
-// ignored.
+// profileRecord is one 15-minute sample; only stored fields are decoded.
 type profileRecord struct {
 	Datum   string `json:"Datum"`   // dd.mm.yyyy
 	Uhrzeit string `json:"Uhrzeit"` // HH:MM:SS, interval start
@@ -32,17 +28,15 @@ type profileRecord struct {
 	Wert    string `json:"Wert"`    // value, comma decimal separator
 }
 
-// Fetcher returns a collector.Fetch bound to the API base URL, bearer token,
-// customer number (GPNR), and metering point (ZP). Each call fetches the
-// previous full day; the configuration is unused (one ZP per deployment).
+// Fetcher returns a collector.Fetch for the previous day; the configuration is
+// unused (one metering point per deployment).
 func Fetcher(baseURL, token, gpnr, zp string) collector.Fetch {
 	return func(ctx context.Context, _ db.Configuration) ([]collector.Reading, error) {
 		return Fetch(ctx, baseURL, token, gpnr, zp, yesterday(time.Now()))
 	}
 }
 
-// Fetch requests the load profile for one day (AB = BIS = day, "yyyy-mm-dd") at
-// the given metering point and returns one reading per 15-minute interval.
+// Fetch returns one reading per 15-minute interval of day ("yyyy-mm-dd").
 func Fetch(
 	ctx context.Context,
 	baseURL, token, gpnr, zp, day string,
@@ -91,8 +85,7 @@ func readings(records []profileRecord) ([]collector.Reading, error) {
 	return out, nil
 }
 
-// recordTime builds the instant for a sample from its date, time, and hour
-// offset (for example "+2"). The collector parses the comma-decimal value.
+// recordTime builds a sample's instant from date, time and hour offset ("+2").
 func recordTime(datum, uhrzeit, utc string) (time.Time, error) {
 	// ponytail: Austria only ever uses whole-hour offsets (+1 / +2).
 	offsetHours, err := strconv.Atoi(strings.TrimSpace(utc))
@@ -103,8 +96,7 @@ func recordTime(datum, uhrzeit, utc string) (time.Time, error) {
 	return time.ParseInLocation("02.01.2006 15:04:05", datum+" "+uhrzeit, loc)
 }
 
-// yesterday returns the previous calendar day in Austria as "yyyy-mm-dd", the
-// format the API's AB/BIS parameters expect.
+// yesterday returns the previous day in Austria as "yyyy-mm-dd".
 func yesterday(now time.Time) string {
 	// ponytail: tzdata is embedded, so LoadLocation with a constant name can't fail.
 	loc, _ := time.LoadLocation("Europe/Vienna")

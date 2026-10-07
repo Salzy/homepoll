@@ -31,16 +31,12 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	// With no arguments this is the collector. `collector mcp` instead serves
-	// the stored metrics to an MCP client over stdio and exits when the client
-	// closes the pipe: read-only, and never migrating, because the collecting
-	// mode owns the schema. One binary so both modes share the same DSN.
+	// `collector mcp`: read-only MCP over stdio, no migration.
 	if len(os.Args) > 1 {
 		if os.Args[1] != "mcp" {
 			log.Fatalf("usage: %s [mcp]", os.Args[0])
 		}
-		// stdout carries the protocol, so nothing may be printed to it. The
-		// standard logger writes to stderr, which MCP clients show as the log.
+		// stdout is the protocol channel; log writes to stderr.
 		if err := mcp.Serve(context.Background(), db.New(sqlDB), os.Stdin, os.Stdout); err != nil {
 			log.Fatalf("serve: %v", err)
 		}
@@ -68,10 +64,8 @@ func main() {
 		mockFetch = mock.New().Fetcher()
 	}
 
-	// Build a fetcher only for the modules that actually appear in the
-	// configuration. Migrations and their seeded config are embedded in this
-	// binary, so a configured module with no fetcher is a build mistake - fail
-	// fast rather than silently dropping its metrics. Add new systems as cases.
+	// One fetcher per configured module. The config is embedded, so a missing
+	// fetcher is a build mistake: fail fast.
 	fetchers := map[string]collector.Fetch{}
 	for _, c := range configs {
 		if _, ok := fetchers[c.Module]; ok {
@@ -103,14 +97,8 @@ func main() {
 	log.Println("shutting down")
 }
 
-// serveMCP starts the MCP HTTP transport alongside the pollers when MCP_ADDR is
-// set, for clients that cannot spawn the stdio mode - a hosted assistant, or
-// one on another machine. Unset, nothing listens and the deployment publishes
-// no port, as before.
-//
-// The endpoint is plain HTTP: bind MCP_ADDR to loopback or to the host's
-// Tailscale address and let that layer carry the encryption and device
-// identity. The bearer token is what stops anyone already on that network.
+// serveMCP serves MCP over plain HTTP when MCP_ADDR is set. Bind it to loopback
+// or Tailscale for transport security; the bearer token guards that network.
 func serveMCP(cfg config.Config, queries *db.Queries) {
 	if cfg.MCPAddr == "" {
 		return

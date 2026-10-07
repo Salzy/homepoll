@@ -1,112 +1,100 @@
 # Homepoll
 
-Lightweight, modular metrics collector for the home. Each external system is a self-contained module that polls its API on its own schedule; readings are stored in PostgreSQL and visualized with Grafana. Adding a system is a `configuration` row plus a fetcher - the core stays untouched.
-
-Two external systems are supported: [ETA pellet heater](docs/eta-heater.md) and [Salzburg Netz grid electricity](docs/salzburg-netz-power.md).
+Modular metrics collector for the home: each module polls an external API on its own schedule, readings land in PostgreSQL, Grafana visualizes them.
 
 ```
-+--------------+                +--------------+
-|  ETA Heater  |  HTTP/XML ---->|              |
-|  (REST API)  |                |              |   SQL    +--------------+
-+--------------+                |  Collector   |--------->|  PostgreSQL  |
-                                |   (GoLang)   |          +------+-------+
-+--------------+                |              |                 | SQL
-| Salzburg Netz| HTTPS/JSON --->|              |                 v
-|  (REST API)  |                |              |          +--------------+
-+--------------+                +--------------+          |   Grafana    |
-                                                          |  port 3000   |
-                                                          +--------------+
+ETA heater    (HTTP/XML)   --->  Collector (Go)  --->  PostgreSQL  --->  Grafana :3000
+Salzburg Netz (HTTPS/JSON) --->        |
+                                       +---> MCP (stdio / HTTP, read-only)
 ```
-
-## General idea
-
-- Polls each configured source's API on a recurring basis and stores the metrics in PostgreSQL.
-- Metrics are visualized with Grafana dashboards, defined as code (JSON).
-- Sources expose many metrics, polled at different rates .
-- Designed to extend to further systems/modules (solar, water, ...) by adding `configuration` rows plus a fetcher.
-- The set of metrics is configurable via the `configuration` table, not hard-coded.
-- A mock module (`DRY_RUN=true`) fills the database so the dashboard can be tested without connected external systems.
 
 ## Quick start
 
 ```bash
-go mod tidy            # Resolves dependencies, writes go.sum
-make up                # PostgreSQL + Grafana in Docker
-DRY_RUN=true make dev  # Run the application with mock data
+go mod tidy            # writes go.sum
+make up                # PostgreSQL + Grafana
+DRY_RUN=true make dev  # mock data, no external systems
 ```
 
-- Grafana: http://localhost:3000 (user: `admin` / password: `admin` or `env.GRAFANA_PASSWORD`).
+Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 
-## Environment Variables (`.env`)
+## How it works
 
-| Variable            | Required | Default         | Description                            |
-| ------------------- | -------- | --------------- | -------------------------------------- |
-| `DRY_RUN`           | No       | `false`         | Generate mock data, no heater needed   |
-| `POSTGRES_HOST`     | No       | `localhost`     | PostgreSQL host                        |
-| `POSTGRES_PORT`     | No       | `5432`          | PostgreSQL port                        |
-| `POSTGRES_USER`     | No       | `homepoll`      | PostgreSQL user                        |
-| `POSTGRES_PASSWORD` | No       | `homepoll`      | PostgreSQL password                    |
-| `POSTGRES_DB`       | No       | `homepoll`      | PostgreSQL database                    |
-| `GRAFANA_PASSWORD`  | No       | `admin`         | Grafana admin password                 |
-| `ETA_HOST`          | No       | `192.168.1.142` | IP address of your ETA heater          |
-| `ETA_PORT`          | No       | `8080`          | Port of your ETA heater                |
-| `POWER_HOST`        | No       | `https://api.salzburgnetz.at` | Salzburg Netz API base URL   |
-| `POWER_TOKEN`       | If POWER | -               | Salzburg Netz API bearer token         |
-| `POWER_GPNR`        | If POWER | -               | Customer number (8 digits, from the portal) |
-| `POWER_ZP`          | If POWER | -               | Metering point (`AT00...`, from the portal) |
-| `MCP_ADDR`          | No       | -               | Serve MCP over HTTP on this address, e.g. `127.0.0.1:8080`. Empty means stdio only, nothing listens |
-| `MCP_TOKEN`         | If `MCP_ADDR` | -          | Bearer token the HTTP MCP endpoint requires        |
+- One `configuration` row per metric: `module`, `name`, `path`, `type` (`numeric` / `text`), `poll_interval` (seconds). Seeded in `internal/db/migrations/00001_init.sql`.
+- The collector groups metrics by interval and batch-inserts readings into `metric`.
+- Migrations (goose) are embedded and applied on startup.
+- New system = enum value + `configuration` rows (migration) + fetcher + a case in `cmd/collector/main.go`.
 
-### How metrics are stored
+## Modules
 
-- A `configuration` row defines each metric: the `module` it belongs to, its `name`, the API response object `path` to read, the `type` (numeric or text), and the `poll_interval` in seconds. The table is seeded by the first migration.
-- The collector groups metrics by poll interval, polls each on its schedule, and writes readings to a `metric` table.
-- Migrations (goose) are embedded in the binary and applied automatically on startup; the full schema lives in `internal/db/migrations`.
+| Module | System | Fetch | Docs |
+| --- | --- | --- | --- |
+| `HEATER` | ETA ePE 9kW (ETAtouch) | `GET /user/var<path>`, one value per call | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0) |
+| `POWER` | Salzburg Netz grid meter | `POST /api/v1/profile`, previous day of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
+| `MOCK` | - | `DRY_RUN=true` replaces every module with random values | - |
 
-## External systems
+**HEATER**
 
-Each shipped module has its own documentation - doc link, seeded metrics, and fetch specifics:
+- Find paths for your installation at `http://<ETA_HOST>:8080/user/menu`.
+- Numeric metrics store element body / `scaleFactor`; text metrics store `strValue`.
+- `xxx` (value unavailable) is skipped and leaves a gap.
+- Values keep the heater's unit (`full_load_hours` is seconds; the dashboard converts).
 
-- [ETA ePE 9kW (HEATER)](docs/eta-heater.md)
-- [Salzburg Netz - grid electricity (POWER)](docs/salzburg-netz-power.md)
+**POWER**
 
-More will be added here as new modules ship.
+- `path` is the OBIS series id `1-1:1.9.0`; account and meter come from `POWER_GPNR` / `POWER_ZP` (Salzburg Netz portal).
+- Re-fetching a day is idempotent (`ON CONFLICT DO NOTHING`).
+
+| Metric | Module | Unit | Interval (s) |
+| --- | --- | --- | --- |
+| `total_consumption` | HEATER | kg | 900 |
+| `full_load_hours` | HEATER | s | 900 |
+| `heating_cycles`, `ignitions`, `buffer_load_cycles` | HEATER | - | 900 |
+| `buffer_charge` | HEATER | % | 300 |
+| `outside_temperature` | HEATER | C | 300 |
+| `boiler_mode` (text) | HEATER | - | 60 |
+| `boiler_temperature` | HEATER | C | 60 |
+| `boiler_pressure` | HEATER | bar | 60 |
+| `boiler_power` (gap while idle) | HEATER | kW | 60 |
+| `requested_power` (0 while idle) | HEATER | kW | 60 |
+| `exhaust_fan` | HEATER | rpm | 60 |
+| `electricity_consumption` | POWER | kWh | 86400 |
+
+## Configuration (`.env`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DRY_RUN` | `false` | Mock data for every module |
+| `POSTGRES_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB` | `localhost` / `5432` / `homepoll` / `homepoll` / `homepoll` | |
+| `POSTGRES_SSLMODE` | `disable` | |
+| `GRAFANA_PASSWORD` | `admin` | |
+| `ETA_HOST` / `ETA_PORT` | `192.168.1.142` / `8080` | |
+| `POWER_HOST` | `https://api.salzburgnetz.at` | |
+| `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP` | - | Required for POWER |
+| `MCP_ADDR` | - | Also serve MCP over HTTP, e.g. `127.0.0.1:8080` |
+| `MCP_TOKEN` | - | Required with `MCP_ADDR` |
 
 ## Grafana
 
-Visualization is delegated entirely to [Grafana](https://grafana.com). No need to reinvent the wheel when prior art already exists.
-
-The repository includes two dashboards, provisioned as code under `grafana/`:
-
-1. **Homepoll - Heater**, covering pellet consumption, full-load runtime, ignitions, boiler mode and power, and daily cost.
-2. **Homepoll - Power**, covering daily and 15-minute electricity consumption and daily cost.
-
+Dashboards as code in `grafana/`: **Heater** (pellets, runtime, ignitions, mode, power, cost) and **Power** (daily and 15-minute consumption, cost).
 
 ## MCP server
 
-The same binary can expose the stored metrics over the [Model Context Protocol](https://modelcontextprotocol.io), so an assistant can answer "how warm is the boiler?" or "how much power did we use yesterday?" from the database Grafana reads. It is read-only and never migrates - point it at a database the collector has already created.
+Read-only [MCP](https://modelcontextprotocol.io) access to the stored metrics. Never migrates.
 
-Two tools:
+| Tool | Purpose |
+| --- | --- |
+| `list_metrics` | All metrics with module, description, unit, type, interval |
+| `query_metric` | Readings of one metric, newest first; optional `module`, `from` / `to` (RFC 3339), `limit` (default 1, max 500) |
 
-| Tool           | Purpose                                                                          |
-| -------------- | -------------------------------------------------------------------------------- |
-| `list_metrics` | Every configured metric with its module, description, unit, type and poll interval |
-| `query_metric` | Readings of one metric, newest first; optional `module`, `from`/`to` (RFC 3339) and `limit` (default 1, max 500) |
-
-### Over stdio (local)
-
-`collector mcp` speaks JSON-RPC on stdin/stdout and the client owns the process, so nothing listens on a port. This is the right choice when the assistant runs on the same machine as the database.
+**stdio** (local, nothing listens). Does not read `.env`; pass non-default `POSTGRES_*` with `-e`.
 
 ```bash
 go build -o "$HOME/.local/bin/homepoll" ./cmd/collector
 claude mcp add homepoll -s local -- "$HOME/.local/bin/homepoll" mcp
 ```
 
-The process does **not** read `.env` or inherit your shell environment, so pass any non-default `POSTGRES_*` value with `-e`.
-
-### Over HTTP (remote)
-
-Setting `MCP_ADDR` makes the running collector also serve MCP at `POST /mcp`, for assistants that cannot spawn a local process. Every request must carry `Authorization: Bearer $MCP_TOKEN`; requests with an `Origin` header are refused outright, which is the DNS-rebinding defence the transport calls for.
+**HTTP** (`POST /mcp`, served by the running collector when `MCP_ADDR` is set). Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback or Tailscale, never `0.0.0.0` on an untrusted network.
 
 ```bash
 MCP_ADDR=127.0.0.1:8080 MCP_TOKEN=$(openssl rand -hex 32) make dev
@@ -114,22 +102,24 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
   --header "Authorization: Bearer $MCP_TOKEN"
 ```
 
-The endpoint is plain HTTP and deliberately so: bind `MCP_ADDR` to loopback or to the host's Tailscale address and let that layer carry the encryption and device identity. Do not bind it to `0.0.0.0` on an untrusted network without a TLS reverse proxy in front.
+## Development
 
-## Make targets
-
-`make dev | build | docker | test | test-all | fmt | tidy | migrate-create | up | down`
-
-`make test` runs unit tests only; `make test-all` adds the DB-backed integration tests (needs `make up`). `make migrate-create NAME=...` scaffolds a new goose migration.
+| Command | Does |
+| --- | --- |
+| `make dev` / `make build` | Live reload (air, loads `.env`) / build once |
+| `make test` / `make test-all` | Unit tests / plus DB integration tests (needs `make up`, or `TEST_DATABASE_URL`) |
+| `make fmt` | gofmt + wrap at 100 columns |
+| `make migrate-create NAME=...` | New goose migration |
+| `make up` / `make down` | Local PostgreSQL + Grafana |
+| `make docker` | Container image (`IMAGE=name:tag`) |
 
 ## CI/CD
 
-`.github/workflows/ci.yml` tests every push/PR and deploys `main` to the shared host over SSH.
+`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/arm/v7` image to GHCR and deploy over SSH via Tailscale.
 
-Set these in repo settings: secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only if you set the `MCP_ADDR` variable); var `GRAFANA_PATH` (host dir Grafana mounts as `GRAFANA_PATH/{provisioning,dashboards}`). Other env vars from the table above can be set as `vars.*` to override their defaults.
+- Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_ADDR`).
+- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`); optional overrides `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `MCP_ADDR`.
 
 ## License
 
-Copyright (C) 2026 Philipp Brandauer
-
-Licensed under the GNU General Public License v3.0 - see [LICENSE](LICENSE).
+Copyright (C) 2026 Philipp Brandauer. GPL v3, see [LICENSE](LICENSE).

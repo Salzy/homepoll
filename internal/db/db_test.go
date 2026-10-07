@@ -15,8 +15,7 @@ func TestBuildInsertMetrics(t *testing.T) {
 }
 
 func TestInsertMetricsEmptyIsNoop(t *testing.T) {
-	// A nil DBTX is safe only because the empty-slice guard returns before
-	// touching the database; drop the guard and this nil-panics.
+	// A nil DBTX is safe only because of the empty-slice guard.
 	if err := New(nil).InsertMetrics(context.Background(), nil); err != nil {
 		t.Errorf("InsertMetrics(nil) = %v, want nil", err)
 	}

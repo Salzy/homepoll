@@ -12,13 +12,10 @@ import (
 
 const testToken = "s3cr3t"
 
-// initializeBody is answered without touching the database, so the handler can
-// be exercised with a nil handle.
+// initializeBody needs no database, so a nil handle works.
 const initializeBody = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
 
-// send runs one request against the handler and returns the recorded response.
-// A nil headers map means "no headers at all", which is how the unauthenticated
-// cases are expressed.
+// send runs one request against the handler; nil headers sends none.
 func send(method, body string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, Path, strings.NewReader(body))
 	for k, v := range headers {

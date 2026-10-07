@@ -54,8 +54,7 @@ func TestCollectDispatchesByModuleAndSkipsUnknown(t *testing.T) {
 	if heaterCalls != 1 || solarCalls != 1 {
 		t.Errorf("fetch calls: heater=%d solar=%d, want 1 and 1", heaterCalls, solarCalls)
 	}
-	// UNKNOWN has no fetcher, so only HEATER + SOLAR are inserted: one batched
-	// query carrying 2 rows * 4 params.
+	// UNKNOWN has no fetcher: one query, 2 rows * 4 params.
 	if fake.execCount != 1 {
 		t.Errorf("ExecContext called %d times, want 1", fake.execCount)
 	}
@@ -91,8 +90,7 @@ func TestCollectFlattensMultipleReadings(t *testing.T) {
 	}
 }
 
-// fakeDBTX is a db.DBTX that records ExecContext calls; only ExecContext is
-// exercised by collect (via InsertMetrics).
+// fakeDBTX records ExecContext calls, the only method collect uses.
 type fakeDBTX struct {
 	execCount int
 	lastArgs  []any

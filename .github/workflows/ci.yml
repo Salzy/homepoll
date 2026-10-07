@@ -77,7 +77,7 @@ jobs:
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Non-sensitive config: GitHub repository variables (readable/editable in the UI).
+          # Variables
           POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
           POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
           POSTGRES_USER: ${{ vars.POSTGRES_USER }}
@@ -85,10 +85,9 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
-          # Empty unless you want the MCP HTTP endpoint; the container uses the
-          # host network, so bind it to loopback or the Tailscale address.
+          # Host network: bind to loopback or Tailscale only.
           MCP_ADDR: ${{ vars.MCP_ADDR }}
-          # Sensitive: GitHub secrets (write-only).
+          # Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POWER_TOKEN: ${{ secrets.POWER_TOKEN }}
           POWER_GPNR: ${{ secrets.POWER_GPNR }}
@@ -101,7 +100,6 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_ADDR,MCP_TOKEN
           script: |
-            # Pull the freshly built image and replace the running container.
             echo "Updating container..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}:latest
@@ -125,7 +123,7 @@ jobs:
               -e MCP_TOKEN \
               ghcr.io/${{ github.repository }}:latest
 
-            # Pick up datasource changes from the scp'd provisioning files (dashboards hot-reload on their own).
+            # Dashboards hot-reload; datasources need an explicit reload.
             echo "Reloading Grafana provisioning..."
             curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
               http://localhost:3000/api/admin/provisioning/datasources/reload

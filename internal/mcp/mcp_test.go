@@ -17,8 +17,7 @@ func configuration(id int32, module, name string) db.Configuration {
 }
 
 func TestServe(t *testing.T) {
-	// Every request here is answered without touching the database, so a nil
-	// handle is safe and the protocol can be exercised with no Postgres.
+	// None of these requests touch the database, so a nil handle works.
 	in := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}`,
 		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
@@ -41,8 +40,7 @@ func TestServe(t *testing.T) {
 		got = append(got, r)
 	}
 
-	// Three responses, not four: the notification carries no id and so must be
-	// answered with silence.
+	// Three responses, not four: the notification gets none.
 	if len(got) != 3 {
 		t.Fatalf("got %d responses, want 3 (the notification must not be answered)", len(got))
 	}

@@ -1,21 +1,6 @@
-// Package mcp serves the collected metrics over the Model Context Protocol, so
-// an assistant can ask what the house is doing ("how warm is the boiler?",
-// "how much power did we use yesterday?") instead of reading a dashboard.
-//
-// Two transports carry the same JSON-RPC 2.0 messages and share everything
-// below answer():
-//
-//   - stdio (Serve): newline-delimited messages on stdin/stdout, the way an MCP
-//     client launches a local server. Nothing listens; the client owns the
-//     process.
-//   - Streamable HTTP (Handler, http.go): one POST endpoint, for clients that
-//     cannot spawn a local process. It listens, so it authenticates.
-//
-// Only the four methods a tools-only server needs are implemented (initialize,
-// ping, tools/list, tools/call); anything else is answered with "method not
-// found".
-//
-// The server is read-only. Migrations belong to the collector.
+// Package mcp is a read-only, tools-only Model Context Protocol server for the
+// collected metrics. Two transports share everything below answer(): stdio
+// (Serve) and Streamable HTTP (Handler, http.go).
 package mcp
 
 import (
@@ -31,8 +16,7 @@ import (
 	"homepoll/internal/db"
 )
 
-// Limits on how many readings one query_metric call may return. The default of
-// 1 makes the common question - "what is it right now" - the default behaviour.
+// query_metric limits; the default of 1 returns the current value.
 const (
 	defaultLimit = 1
 	maxLimit     = 500
@@ -41,26 +25,23 @@ const (
 // defaultProtocolVersion is used only when the client names no version.
 const defaultProtocolVersion = "2025-06-18"
 
-// JSON-RPC 2.0 error codes, the subset this server can produce.
+// JSON-RPC 2.0 error codes this server produces.
 const (
 	codeMethodNotFound = -32601
 	codeInternalError  = -32603
 )
 
-// errMethodNotFound marks an unknown method or tool name, so dispatch can map
-// it to the JSON-RPC code clients expect instead of a generic failure.
+// errMethodNotFound marks an unknown method or tool (codeMethodNotFound).
 var errMethodNotFound = errors.New("method not found")
 
-// request is an incoming JSON-RPC message. A message with no ID is a
-// notification, which by the specification gets no response at all.
+// request is an incoming JSON-RPC message; no ID means a notification (no reply).
 type request struct {
 	ID     json.RawMessage `json:"id"`
 	Params json.RawMessage `json:"params"`
 	Method string          `json:"method"`
 }
 
-// response is an outgoing JSON-RPC message; exactly one of Result and Error is
-// set.
+// response is an outgoing JSON-RPC message; exactly one of Result and Error is set.
 type response struct {
 	ID      json.RawMessage `json:"id"`
 	Result  any             `json:"result,omitempty"`
@@ -74,8 +55,7 @@ type rpcError struct {
 	Code    int    `json:"code"`
 }
 
-// Serve reads JSON-RPC requests from in and writes responses to out until in is
-// exhausted, which is how an MCP client signals shutdown: it closes the pipe.
+// Serve answers JSON-RPC requests from in on out until in is closed.
 //
 // Parameters:
 //   - ctx: cancellation/deadline passed to every database query.
@@ -96,7 +76,7 @@ func Serve(ctx context.Context, q *db.Queries, in io.Reader, out io.Writer) erro
 			return fmt.Errorf("decode request: %w", err)
 		}
 		if len(req.ID) == 0 {
-			continue // A notification, such as notifications/initialized.
+			continue // notification
 		}
 		if err := enc.Encode(answer(ctx, q, req)); err != nil {
 			return fmt.Errorf("encode response: %w", err)
@@ -104,8 +84,7 @@ func Serve(ctx context.Context, q *db.Queries, in io.Reader, out io.Writer) erro
 	}
 }
 
-// answer runs one request and wraps the outcome as a JSON-RPC response. Both
-// transports share it; they differ only in how they frame the bytes.
+// answer runs one request and wraps the outcome as a JSON-RPC response.
 func answer(ctx context.Context, q *db.Queries, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 	result, err := dispatch(ctx, q, req)
@@ -141,11 +120,8 @@ func dispatch(ctx context.Context, q *db.Queries, req request) (any, error) {
 	}
 }
 
-// initialize answers the handshake. The reply echoes the version the client
-// asked for: every revision of the specification spells these four methods the
-// same way, so there is nothing to negotiate.
-// ponytail: echo the client's version. Revisit if a tool ever needs a feature
-// that only exists from some revision onwards.
+// initialize answers the handshake, echoing the client's protocol version.
+// ponytail: echo the client's version; revisit if a tool needs a newer revision.
 func initialize(params json.RawMessage) any {
 	var p struct {
 		ProtocolVersion string `json:"protocolVersion"`
@@ -161,9 +137,7 @@ func initialize(params json.RawMessage) any {
 	}
 }
 
-// toolsJSON is the tools/list payload. It is a literal rather than a tower of
-// Go maps because it is pure JSON Schema that is read far more often than it is
-// computed; the descriptions are the model's only documentation.
+// toolsJSON is the tools/list payload; its descriptions are the model's only docs.
 var toolsJSON = json.RawMessage(`[
   {
     "name": "list_metrics",
@@ -187,13 +161,8 @@ var toolsJSON = json.RawMessage(`[
   }
 ]`)
 
-// callTool runs one tool and wraps its output as MCP tool content.
-//
-// A tool that fails because of its arguments - an unknown metric name, an
-// ambiguous one - reports that inside the result with isError set, not as a
-// JSON-RPC error, because the model is meant to read the message and correct
-// itself. Only a genuinely broken call (unparseable params, unknown tool) is a
-// protocol error.
+// callTool runs one tool. Bad arguments come back as isError content so the
+// model can correct itself; only a malformed call is a protocol error.
 func callTool(ctx context.Context, q *db.Queries, params json.RawMessage) (any, error) {
 	var p struct {
 		Arguments json.RawMessage `json:"arguments"`
@@ -273,15 +242,13 @@ type queryArgs struct {
 	Limit  int32  `json:"limit"`
 }
 
-// reading is one entry of the query_metric result. Value is a number for
-// numeric metrics, a string for text metrics, and null for a missing reading.
+// reading is one query_metric entry; Value is a number, a string, or null.
 type reading struct {
 	RecordedAt time.Time `json:"recorded_at"`
 	Value      any       `json:"value"`
 }
 
-// queryResult is the query_metric payload: the metric it resolved to, so the
-// model can see which module and unit the numbers belong to, plus the readings.
+// queryResult is the query_metric payload: the resolved metric plus readings.
 type queryResult struct {
 	Module   string    `json:"module"`
 	Name     string    `json:"name"`
@@ -349,8 +316,7 @@ func value(r db.Reading) any {
 	}
 }
 
-// parseBound reads an optional RFC 3339 window bound. An empty string means the
-// window is open on that side.
+// parseBound parses an optional RFC 3339 bound; empty means unbounded.
 func parseBound(s, field string) (sql.NullTime, error) {
 	if s == "" {
 		return sql.NullTime{}, nil
@@ -364,8 +330,7 @@ func parseBound(s, field string) (sql.NullTime, error) {
 	return sql.NullTime{Time: t, Valid: true}, nil
 }
 
-// clampLimit keeps a missing, negative or over-large limit inside the range the
-// tool advertises.
+// clampLimit keeps limit within 1..maxLimit, defaulting to defaultLimit.
 func clampLimit(limit int32) int32 {
 	switch {
 	case limit <= 0:
@@ -377,9 +342,8 @@ func clampLimit(limit int32) int32 {
 	}
 }
 
-// findConfiguration resolves a metric by name, optionally narrowed by module.
-// Names are unique only within a module, so an ambiguous name is reported back
-// with the modules to choose from rather than silently resolved.
+// findConfiguration resolves a metric by name and optional module. Names are
+// unique per module only, so an ambiguous name is an error listing the modules.
 func findConfiguration(
 	configs []db.Configuration,
 	name, module string,

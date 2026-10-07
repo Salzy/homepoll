@@ -5,5 +5,5 @@ tmp_dir = "tmp"
   cmd = "go build -o ./tmp/collector ./cmd/collector"
   bin = "./tmp/collector"
   include_ext = ["go"]
-  exclude_dir = ["tmp", "grafana", "docs", ".github"]
+  exclude_dir = ["tmp", "grafana", ".github"]
   delay = 500

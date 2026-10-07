@@ -16,9 +16,8 @@ import (
 
 const defaultDSN = "postgres://homepoll:homepoll@localhost:5432/homepoll?sslmode=disable"
 
-// openTestDB connects to the integration Postgres (TEST_DATABASE_URL, or the
-// docker-compose default) and applies the migrations. It skips under -short, and
-// also when no database is reachable, so `make test` stays green without a DB.
+// openTestDB connects to TEST_DATABASE_URL (or the compose default) and migrates.
+// It skips under -short or when no database is reachable.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	if testing.Short() {
@@ -46,10 +45,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// TestListConfigurations runs ListConfigurations against the real schema. It is
-// only faked in the unit tests, yet runs on every startup - this guards the
-// hand-written struct and row scan in db.go against schema drift (for example a
-// column added in a migration without a matching edit to Configuration).
+// TestListConfigurations guards the Configuration scan against schema drift.
 func TestListConfigurations(t *testing.T) {
 	sqlDB := openTestDB(t)
 	defer sqlDB.Close()
@@ -67,10 +63,7 @@ func TestListConfigurations(t *testing.T) {
 		byName[c.Name] = c
 	}
 
-	// Representative seeded metrics across both modules and both value types,
-	// so the assertion exercises module-enum, numeric, and text scanning.
-	// description and unit exist only to describe a metric to an MCP client;
-	// nothing in the collector reads them, so this is what keeps their scan honest.
+	// Both modules and both value types; description and unit are read only by MCP.
 	if c := byName["boiler_temperature"]; c.Unit.String != "C" || c.Description.String == "" {
 		t.Errorf(
 			"boiler_temperature = {unit:%q description:%q}, want unit C and a non-empty description",
@@ -102,11 +95,7 @@ func TestListConfigurations(t *testing.T) {
 	}
 }
 
-// TestBatchInsertManyRows exercises the hand-written variable-length INSERT in
-// db.go with more than one row (the POWER module inserts a full day at once).
-// The unit test only checks the built SQL string and the dedup test inserts a
-// single row, so this is the only place the multi-row statement runs against
-// real Postgres.
+// TestBatchInsertManyRows runs the multi-row INSERT against real Postgres.
 func TestBatchInsertManyRows(t *testing.T) {
 	sqlDB := openTestDB(t)
 	defer sqlDB.Close()
@@ -161,11 +150,7 @@ func TestBatchInsertManyRows(t *testing.T) {
 	}
 }
 
-// TestMetricDedup verifies that the (configuration_id, recorded_at) primary key
-// plus ON CONFLICT DO NOTHING make re-inserting the same instant idempotent -
-// the scenario when the POWER module re-fetches the previous day on restart.
-// The whole test runs in a transaction that is rolled back, so it leaves no
-// rows behind even when run against the live dev database.
+// TestMetricDedup checks re-inserting the same instant is a no-op. Rolled back.
 func TestMetricDedup(t *testing.T) {
 	sqlDB := openTestDB(t)
 	defer sqlDB.Close()
@@ -222,10 +207,8 @@ func TestMetricDedup(t *testing.T) {
 	}
 }
 
-// TestListReadings exercises the hand-written read query behind the MCP
-// query_metric tool: newest-first ordering, the optional window bounds, the
-// limit, and the scan of both value columns. It runs in a transaction that is
-// rolled back, so it leaves no rows behind.
+// TestListReadings covers ordering, window bounds, limit and both value columns.
+// Rolled back.
 func TestListReadings(t *testing.T) {
 	sqlDB := openTestDB(t)
 	defer sqlDB.Close()
@@ -255,8 +238,7 @@ func TestListReadings(t *testing.T) {
 		t.Fatal("seeded metric boiler_mode is missing")
 	}
 
-	// Far enough in the future that these rows are the newest in the table even
-	// when the test runs against the live development database.
+	// In the future, so these rows are newest even in a dev database.
 	base := time.Date(2099, 3, 1, 0, 0, 0, 0, time.UTC)
 	at := func(i int) time.Time { return base.Add(time.Duration(i) * 15 * time.Minute) }
 	rows := make([]db.InsertMetricParams, 0, 5)

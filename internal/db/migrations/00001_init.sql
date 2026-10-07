@@ -17,10 +17,8 @@ CREATE TABLE configuration (
   UNIQUE (module, name)
 );
 
--- A reading is identified by its metric and instant, so there is no surrogate
--- key. The composite primary key doubles as the dedupe target for the batched
--- ON CONFLICT DO NOTHING insert (keeping the daily POWER re-fetch idempotent)
--- and as the index for "latest value" lookups.
+-- No surrogate key: (configuration_id, recorded_at) is the ON CONFLICT dedupe
+-- target and the index for latest-value lookups.
 CREATE TABLE metric (
   recorded_at timestamptz NOT NULL DEFAULT NOW(),
   value_num double precision,
@@ -29,9 +27,8 @@ CREATE TABLE metric (
   PRIMARY KEY (configuration_id, recorded_at)
 );
 
--- HEATER paths are the installation-specific CAN-bus addresses from /user/menu.
--- The POWER path is the universal OBIS series id; that account (GPNR) and
--- metering point (ZP) are per-deployment and come from POWER_GPNR / POWER_ZP.
+-- HEATER path: installation-specific address from /user/menu.
+-- POWER path: OBIS series id; account and meter come from POWER_GPNR / POWER_ZP.
 INSERT INTO configuration (module, name, description, unit, path, type, poll_interval)
 VALUES
   ('HEATER', 'total_consumption', 'Total pellet consumption (kg). Monotonically increasing counter.', 'kg', '/264/10891/0/0/12016', 'numeric',900),

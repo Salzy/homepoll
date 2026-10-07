@@ -108,7 +108,7 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 
 ## CI/CD
 
-`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/arm/v7` image to GHCR and deploy over SSH via Tailscale.
+`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/amd64` image to GHCR and deploy over SSH via Tailscale.
 
 - Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_ADDR`).
 - Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`); optional overrides `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `MCP_ADDR`.

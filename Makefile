@@ -1,5 +1,7 @@
 .PHONY: dev build docker test test-all fmt tidy migrate-create up down
 
+.DEFAULT_GOAL := build
+
 IMAGE ?= homepoll
 
 dev: ## live-reload the collector (loads .env if present)

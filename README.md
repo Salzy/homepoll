@@ -5,7 +5,7 @@ Modular metrics collector for the home: each module polls an external API on its
 ```
 ETA heater    (HTTP/XML)   --->  Collector (Go)  --->  PostgreSQL  --->  Grafana :3000
 Salzburg Netz (HTTPS/JSON) --->        |
-                                       +---> MCP (stdio / HTTP, read-only)
+                                       +---> MCP over HTTP (read-only, optional)
 ```
 
 ## Quick start
@@ -27,11 +27,11 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 
 ## Modules
 
-| Module | System | Fetch | Docs |
-| --- | --- | --- | --- |
-| `HEATER` | ETA ePE 9kW (ETAtouch) | `GET /user/var<path>`, one value per call | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0) |
-| `POWER` | Salzburg Netz grid meter | `POST /api/v1/profile`, previous day of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
-| `MOCK` | - | `DRY_RUN=true` replaces every module with random values | - |
+| Module   | System                   | Fetch                                                                | Docs                                                                                                                                    |
+| -------- | ------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEATER` | ETA ePE 9kW (ETAtouch)   | `GET /user/var<path>`, one value per call                            | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0)                    |
+| `POWER`  | Salzburg Netz grid meter | `POST /api/v1/profile`, previous day of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
+| `MOCK`   | -                        | `DRY_RUN=true` replaces every module with random values              | -                                                                                                                                       |
 
 **HEATER**
 
@@ -45,34 +45,34 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 - `path` is the OBIS series id `1-1:1.9.0`; account and meter come from `POWER_GPNR` / `POWER_ZP` (Salzburg Netz portal).
 - Re-fetching a day is idempotent (`ON CONFLICT DO NOTHING`).
 
-| Metric | Module | Unit | Interval (s) |
-| --- | --- | --- | --- |
-| `total_consumption` | HEATER | kg | 900 |
-| `full_load_hours` | HEATER | s | 900 |
-| `heating_cycles`, `ignitions`, `buffer_load_cycles` | HEATER | - | 900 |
-| `buffer_charge` | HEATER | % | 300 |
-| `outside_temperature` | HEATER | C | 300 |
-| `boiler_mode` (text) | HEATER | - | 60 |
-| `boiler_temperature` | HEATER | C | 60 |
-| `boiler_pressure` | HEATER | bar | 60 |
-| `boiler_power` (gap while idle) | HEATER | kW | 60 |
-| `requested_power` (0 while idle) | HEATER | kW | 60 |
-| `exhaust_fan` | HEATER | rpm | 60 |
-| `electricity_consumption` | POWER | kWh | 86400 |
+| Metric                                              | Module | Unit | Interval (s) |
+| --------------------------------------------------- | ------ | ---- | ------------ |
+| `total_consumption`                                 | HEATER | kg   | 900          |
+| `full_load_hours`                                   | HEATER | s    | 900          |
+| `heating_cycles`, `ignitions`, `buffer_load_cycles` | HEATER | -    | 900          |
+| `buffer_charge`                                     | HEATER | %    | 300          |
+| `outside_temperature`                               | HEATER | C    | 300          |
+| `boiler_mode` (text)                                | HEATER | -    | 60           |
+| `boiler_temperature`                                | HEATER | C    | 60           |
+| `boiler_pressure`                                   | HEATER | bar  | 60           |
+| `boiler_power` (gap while idle)                     | HEATER | kW   | 60           |
+| `requested_power` (0 while idle)                    | HEATER | kW   | 60           |
+| `exhaust_fan`                                       | HEATER | rpm  | 60           |
+| `electricity_consumption`                           | POWER  | kWh  | 86400        |
 
 ## Configuration (`.env`)
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `DRY_RUN` | `false` | Mock data for every module |
-| `POSTGRES_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB` | `localhost` / `5432` / `homepoll` / `homepoll` / `homepoll` | |
-| `POSTGRES_SSLMODE` | `disable` | |
-| `GRAFANA_PASSWORD` | `admin` | |
-| `ETA_HOST` / `ETA_PORT` | `192.168.1.142` / `8080` | |
-| `POWER_HOST` | `https://api.salzburgnetz.at` | |
-| `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP` | - | Required for POWER |
-| `MCP_ADDR` | - | Also serve MCP over HTTP, e.g. `127.0.0.1:8080` |
-| `MCP_TOKEN` | - | Required with `MCP_ADDR` |
+| Variable                                                  | Default                                                     | Notes                                                         |
+| --------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `DRY_RUN`                                                 | `false`                                                     | Mock data for every module                                    |
+| `POSTGRES_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB` | `localhost` / `5432` / `homepoll` / `homepoll` / `homepoll` |                                                               |
+| `POSTGRES_SSLMODE`                                        | `disable`                                                   |                                                               |
+| `GRAFANA_PASSWORD`                                        | `admin`                                                     |                                                               |
+| `ETA_HOST` / `ETA_PORT`                                   | `192.168.1.142` / `8080`                                    |                                                               |
+| `POWER_HOST`                                              | `https://api.salzburgnetz.at`                               |                                                               |
+| `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`                   | -                                                           | Required for POWER                                            |
+| `MCP_ADDR`                                                | -                                                           | Serve MCP over HTTP, e.g. `127.0.0.1:8080`; empty disables it |
+| `MCP_TOKEN`                                               | -                                                           | Required with `MCP_ADDR`                                      |
 
 ## Grafana
 
@@ -80,21 +80,14 @@ Dashboards as code in `grafana/`: **Heater** (pellets, runtime, ignitions, mode,
 
 ## MCP server
 
-Read-only [MCP](https://modelcontextprotocol.io) access to the stored metrics. Never migrates.
+Read-only [MCP](https://modelcontextprotocol.io) access to the stored metrics, served by the running collector at `POST /mcp` when `MCP_ADDR` is set.
 
-| Tool | Purpose |
-| --- | --- |
-| `list_metrics` | All metrics with module, description, unit, type, interval |
+| Tool           | Purpose                                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `list_metrics` | All metrics with module, description, unit, type, interval                                                      |
 | `query_metric` | Readings of one metric, newest first; optional `module`, `from` / `to` (RFC 3339), `limit` (default 1, max 500) |
 
-**stdio** (local, nothing listens). Does not read `.env`; pass non-default `POSTGRES_*` with `-e`.
-
-```bash
-go build -o "$HOME/.local/bin/homepoll" ./cmd/collector
-claude mcp add homepoll -s local -- "$HOME/.local/bin/homepoll" mcp
-```
-
-**HTTP** (`POST /mcp`, served by the running collector when `MCP_ADDR` is set). Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback or Tailscale, never `0.0.0.0` on an untrusted network.
+Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback or Tailscale, never `0.0.0.0` on an untrusted network.
 
 ```bash
 MCP_ADDR=127.0.0.1:8080 MCP_TOKEN=$(openssl rand -hex 32) make dev
@@ -104,14 +97,14 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 
 ## Development
 
-| Command | Does |
-| --- | --- |
-| `make dev` / `make build` | Live reload (air, loads `.env`) / build once |
-| `make test` / `make test-all` | Unit tests / plus DB integration tests (needs `make up`, or `TEST_DATABASE_URL`) |
-| `make fmt` | gofmt + wrap at 100 columns |
-| `make migrate-create NAME=...` | New goose migration |
-| `make up` / `make down` | Local PostgreSQL + Grafana |
-| `make docker` | Container image (`IMAGE=name:tag`) |
+| Command                        | Does                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `make dev` / `make build`      | Live reload (air, loads `.env`) / build once                                     |
+| `make test` / `make test-all`  | Unit tests / plus DB integration tests (needs `make up`, or `TEST_DATABASE_URL`) |
+| `make fmt`                     | gofmt + wrap at 100 columns                                                      |
+| `make migrate-create NAME=...` | New goose migration                                                              |
+| `make up` / `make down`        | Local PostgreSQL + Grafana                                                       |
+| `make docker`                  | Container image (`IMAGE=name:tag`)                                               |
 
 ## CI/CD
 

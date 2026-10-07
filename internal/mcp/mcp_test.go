@@ -16,33 +16,19 @@ func configuration(id int32, module, name string) db.Configuration {
 	return db.Configuration{ID: id, Module: module, Name: name, Type: "numeric"}
 }
 
-func TestServe(t *testing.T) {
+func TestAnswer(t *testing.T) {
 	// None of these requests touch the database, so a nil handle works.
-	in := strings.Join([]string{
+	var got []response
+	for _, msg := range []string{
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}`,
-		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":3,"method":"resources/list"}`,
-	}, "\n")
-
-	var out strings.Builder
-	if err := Serve(context.Background(), db.New(nil), strings.NewReader(in), &out); err != nil {
-		t.Fatalf("Serve: %v", err)
-	}
-
-	dec := json.NewDecoder(strings.NewReader(out.String()))
-	var got []response
-	for dec.More() {
-		var r response
-		if err := dec.Decode(&r); err != nil {
-			t.Fatalf("decode response: %v", err)
+	} {
+		var req request
+		if err := json.Unmarshal([]byte(msg), &req); err != nil {
+			t.Fatalf("decode request: %v", err)
 		}
-		got = append(got, r)
-	}
-
-	// Three responses, not four: the notification gets none.
-	if len(got) != 3 {
-		t.Fatalf("got %d responses, want 3 (the notification must not be answered)", len(got))
+		got = append(got, answer(context.Background(), db.New(nil), req))
 	}
 
 	t.Run("should echo the protocol version the client asked for", func(t *testing.T) {

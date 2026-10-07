@@ -1,6 +1,5 @@
 // Package mcp is a read-only, tools-only Model Context Protocol server for the
-// collected metrics. Two transports share everything below answer(): stdio
-// (Serve) and Streamable HTTP (Handler, http.go).
+// collected metrics. Protocol and tools live here; the HTTP transport in http.go.
 package mcp
 
 import (
@@ -9,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -53,35 +51,6 @@ type response struct {
 type rpcError struct {
 	Message string `json:"message"`
 	Code    int    `json:"code"`
-}
-
-// Serve answers JSON-RPC requests from in on out until in is closed.
-//
-// Parameters:
-//   - ctx: cancellation/deadline passed to every database query.
-//   - q: the read-only data access used by the tools.
-//   - in: the request stream (os.Stdin in production).
-//   - out: the response stream (os.Stdout in production - never log to it).
-//
-// Returns nil on a clean end of input, or the first transport error.
-func Serve(ctx context.Context, q *db.Queries, in io.Reader, out io.Writer) error {
-	dec := json.NewDecoder(in)
-	enc := json.NewEncoder(out)
-	for {
-		var req request
-		if err := dec.Decode(&req); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("decode request: %w", err)
-		}
-		if len(req.ID) == 0 {
-			continue // notification
-		}
-		if err := enc.Encode(answer(ctx, q, req)); err != nil {
-			return fmt.Errorf("encode response: %w", err)
-		}
-	}
 }
 
 // answer runs one request and wraps the outcome as a JSON-RPC response.

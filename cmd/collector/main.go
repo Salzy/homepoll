@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -30,18 +29,6 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer sqlDB.Close()
-
-	// `collector mcp`: read-only MCP over stdio, no migration.
-	if len(os.Args) > 1 {
-		if os.Args[1] != "mcp" {
-			log.Fatalf("usage: %s [mcp]", os.Args[0])
-		}
-		// stdout is the protocol channel; log writes to stderr.
-		if err := mcp.Serve(context.Background(), db.New(sqlDB), os.Stdin, os.Stdout); err != nil {
-			log.Fatalf("serve: %v", err)
-		}
-		return
-	}
 
 	if err := migrate(sqlDB); err != nil {
 		log.Fatalf("migrate: %v", err)

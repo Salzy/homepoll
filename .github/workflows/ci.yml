@@ -75,8 +75,8 @@ jobs:
       - name: Deploy Grafana files
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "grafana/provisioning,grafana/dashboards"
           target: ${{ vars.GRAFANA_PATH }}
@@ -110,8 +110,8 @@ jobs:
           GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
           MCP_TOKEN: ${{ secrets.MCP_TOKEN }}
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,GRAFANA_URL,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
           script: |

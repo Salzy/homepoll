@@ -87,7 +87,7 @@ Read-only [MCP](https://modelcontextprotocol.io) access to the stored metrics, s
 | `list_metrics` | All metrics with module, description, unit, type, interval                                                      |
 | `query_metric` | Readings of one metric, newest first; optional `module`, `from` / `to` (RFC 3339), `limit` (default 1, max 500) |
 
-Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback or Tailscale, never `0.0.0.0` on an untrusted network.
+Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback, Tailscale or a trusted LAN, never `0.0.0.0` on an untrusted network.
 
 ```bash
 MCP_ADDR=127.0.0.1:8080 MCP_TOKEN=$(openssl rand -hex 32) make dev
@@ -111,7 +111,7 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 `.github/workflows/ci.yml`: test every push and PR; on `main`, build the image (`PLATFORMS`, default `linux/arm/v7`) to GHCR and deploy over SSH via Tailscale onto the host's `homelab` Docker network, where Postgres runs as `postgres`.
 
 - Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_PUBLISH`).
-- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana on port 3001), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `PLATFORMS`, `MCP_PUBLISH` (host address for MCP, e.g. `<tailscale-ip>:8080`; empty disables MCP).
+- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana on port 3001), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `PLATFORMS`, `MCP_PUBLISH` (comma-separated host addresses for MCP, e.g. `<tailscale-ip>:8080,<lan-ip>:8080`; empty disables MCP).
 - The Grafana datasource reads `HOMEPOLL_DB_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_NAME` from Grafana's environment.
 
 ## License

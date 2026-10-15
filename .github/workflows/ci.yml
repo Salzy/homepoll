@@ -94,8 +94,9 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
-          # Host address to publish MCP on, e.g. <tailscale-ip>:8080. Tailscale
-          # only, never 0.0.0.0. Empty disables MCP.
+          # Comma-separated host addresses to publish MCP on, e.g.
+          # <tailscale-ip>:8080,<lan-ip>:8080. Trusted networks only, never
+          # 0.0.0.0. Empty disables MCP.
           MCP_PUBLISH: ${{ vars.MCP_PUBLISH }}
           # Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -117,11 +118,13 @@ jobs:
             docker stop homepoll-collector || true
             docker rm homepoll-collector || true
             # MCP listens on all interfaces inside the container; only the
-            # published host address (Tailscale) is reachable from outside.
-            if [ -n "$MCP_PUBLISH" ]; then
-              set -- -p "$MCP_PUBLISH:8080" -e MCP_ADDR=:8080 -e MCP_TOKEN
-            else
-              set --
+            # published host addresses are reachable from outside.
+            set --
+            for addr in $(echo "$MCP_PUBLISH" | tr ',' ' '); do
+              set -- "$@" -p "$addr:8080"
+            done
+            if [ $# -gt 0 ]; then
+              set -- "$@" -e MCP_ADDR=:8080 -e MCP_TOKEN
             fi
             # Shared homelab network: Postgres is reachable as "postgres".
             docker run -d --name homepoll-collector \

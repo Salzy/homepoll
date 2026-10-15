@@ -108,10 +108,10 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 
 ## CI/CD
 
-`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/arm/v7` image to GHCR and deploy over SSH via Tailscale to the [homelab](https://github.com/Salzy/homelab) Raspberry Pi, on its shared `homelab` Docker network.
+`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/arm/v7` image to GHCR and deploy over SSH via Tailscale onto the host's `homelab` Docker network, where Postgres runs as `postgres`.
 
 - Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_PUBLISH`).
-- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the homelab Grafana), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `MCP_PUBLISH` (host address for MCP, e.g. `<tailscale-ip>:8080`; empty disables MCP).
+- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana on port 3001), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `MCP_PUBLISH` (host address for MCP, e.g. `<tailscale-ip>:8080`; empty disables MCP).
 - The Grafana datasource reads `HOMEPOLL_DB_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_NAME` from Grafana's environment.
 
 ## License

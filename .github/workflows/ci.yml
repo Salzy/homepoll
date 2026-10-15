@@ -51,7 +51,8 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          platforms: linux/amd64
+          # Raspberry Pi 2 (32-bit ARM).
+          platforms: linux/arm/v7
           push: true
           tags: |
             ghcr.io/salzy/homepoll:latest
@@ -93,8 +94,9 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
-          # Host network: bind to loopback or Tailscale only.
-          MCP_ADDR: ${{ vars.MCP_ADDR }}
+          # Host address to publish MCP on, e.g. <tailscale-ip>:8080. Tailscale
+          # only, never 0.0.0.0. Empty disables MCP.
+          MCP_PUBLISH: ${{ vars.MCP_PUBLISH }}
           # Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POWER_TOKEN: ${{ secrets.POWER_TOKEN }}
@@ -106,7 +108,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_ADDR,MCP_TOKEN
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_PUBLISH,MCP_TOKEN
           script: |
             echo "Updating container..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -114,9 +116,17 @@ jobs:
             docker pull ghcr.io/salzy/homepoll:${{ github.sha }}
             docker stop homepoll-collector || true
             docker rm homepoll-collector || true
+            # MCP listens on all interfaces inside the container; only the
+            # published host address (Tailscale) is reachable from outside.
+            if [ -n "$MCP_PUBLISH" ]; then
+              set -- -p "$MCP_PUBLISH:8080" -e MCP_ADDR=:8080 -e MCP_TOKEN
+            else
+              set --
+            fi
+            # Shared homelab network: Postgres is reachable as "postgres".
             docker run -d --name homepoll-collector \
               --restart unless-stopped \
-              --network host \
+              --network homelab \
               -e POSTGRES_HOST \
               -e POSTGRES_PORT \
               -e POSTGRES_USER \
@@ -128,11 +138,16 @@ jobs:
               -e POWER_TOKEN \
               -e POWER_GPNR \
               -e POWER_ZP \
-              -e MCP_ADDR \
-              -e MCP_TOKEN \
+              "$@" \
               ghcr.io/salzy/homepoll:${{ github.sha }}
 
+            # Images are tagged per commit: remove all but the one just deployed.
+            docker images ghcr.io/salzy/homepoll --format '{{.Repository}}:{{.Tag}}' \
+              | grep -vxF "ghcr.io/salzy/homepoll:${{ github.sha }}" \
+              | xargs -r docker rmi || true
+
             # Dashboards hot-reload; datasources need an explicit reload.
+            # Homelab Grafana listens on 3001 (AdGuard owns 3000).
             echo "Reloading Grafana provisioning..."
             curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
-              http://localhost:3000/api/admin/provisioning/datasources/reload
+              http://localhost:3001/api/admin/provisioning/datasources/reload

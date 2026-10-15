@@ -98,6 +98,8 @@ jobs:
           DOCKER_NETWORK: ${{ vars.DOCKER_NETWORK || 'host' }}
           # Grafana as reachable from the deploy host, for the provisioning reload.
           GRAFANA_URL: ${{ vars.GRAFANA_URL || 'http://localhost:3000' }}
+          # Grafana server admin; the provisioning reload requires one.
+          GRAFANA_USER: ${{ vars.GRAFANA_USER || 'admin' }}
           # Comma-separated host addresses to serve MCP on, e.g.
           # <tailscale-ip>:8080,<lan-ip>:8080 (only one with host networking).
           # Trusted networks only, never 0.0.0.0. Empty disables MCP.
@@ -113,7 +115,7 @@ jobs:
           host: ${{ vars.DEPLOY_HOST }}
           username: ${{ vars.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,GRAFANA_URL,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_USER,GRAFANA_PASSWORD,GRAFANA_URL,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
           script: |
             # MCP arguments first, so a bad setting fails before the running
             # container is stopped.
@@ -166,5 +168,5 @@ jobs:
 
             # Dashboards hot-reload; datasources need an explicit reload.
             echo "Reloading Grafana provisioning..."
-            curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
+            curl -fsS -X POST -u "$GRAFANA_USER:$GRAFANA_PASSWORD" \
               "$GRAFANA_URL/api/admin/provisioning/datasources/reload"

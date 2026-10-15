@@ -111,7 +111,7 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 `.github/workflows/ci.yml`: test every push and PR; on `main`, build the image (`PLATFORMS`, default `linux/amd64`) to GHCR and deploy over SSH via Tailscale.
 
 - Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_PUBLISH`).
-- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana on port 3001), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `PLATFORMS`, `DOCKER_NETWORK` (default `host`), `MCP_PUBLISH` (comma-separated host addresses for MCP, e.g. `<tailscale-ip>:8080,<lan-ip>:8080`, only one with `host` networking; empty disables MCP).
+- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `GRAFANA_URL` (default `http://localhost:3000`), `PLATFORMS`, `DOCKER_NETWORK` (default `host`), `MCP_PUBLISH` (comma-separated host addresses for MCP, e.g. `<tailscale-ip>:8080,<lan-ip>:8080`, only one with `host` networking; empty disables MCP).
 - The Grafana datasource reads `HOMEPOLL_DB_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_NAME` from Grafana's environment.
 
 ## License

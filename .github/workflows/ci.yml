@@ -96,6 +96,8 @@ jobs:
           # Docker network of the collector, e.g. a shared network where
           # Postgres runs. "host" uses the host's network stack.
           DOCKER_NETWORK: ${{ vars.DOCKER_NETWORK || 'host' }}
+          # Grafana as reachable from the deploy host, for the provisioning reload.
+          GRAFANA_URL: ${{ vars.GRAFANA_URL || 'http://localhost:3000' }}
           # Comma-separated host addresses to serve MCP on, e.g.
           # <tailscale-ip>:8080,<lan-ip>:8080 (only one with host networking).
           # Trusted networks only, never 0.0.0.0. Empty disables MCP.
@@ -111,7 +113,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,GRAFANA_URL,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
           script: |
             # MCP arguments first, so a bad setting fails before the running
             # container is stopped.
@@ -163,7 +165,6 @@ jobs:
               | xargs -r docker rmi || true
 
             # Dashboards hot-reload; datasources need an explicit reload.
-            # Homelab Grafana listens on 3001 (AdGuard owns 3000).
             echo "Reloading Grafana provisioning..."
             curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
-              http://localhost:3001/api/admin/provisioning/datasources/reload
+              "$GRAFANA_URL/api/admin/provisioning/datasources/reload"

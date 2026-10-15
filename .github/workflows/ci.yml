@@ -93,9 +93,12 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
-          # Comma-separated host addresses to publish MCP on, e.g.
-          # <tailscale-ip>:8080,<lan-ip>:8080. Trusted networks only, never
-          # 0.0.0.0. Empty disables MCP.
+          # Docker network of the collector, e.g. a shared network where
+          # Postgres runs. "host" uses the host's network stack.
+          DOCKER_NETWORK: ${{ vars.DOCKER_NETWORK || 'host' }}
+          # Comma-separated host addresses to serve MCP on, e.g.
+          # <tailscale-ip>:8080,<lan-ip>:8080 (only one with host networking).
+          # Trusted networks only, never 0.0.0.0. Empty disables MCP.
           MCP_PUBLISH: ${{ vars.MCP_PUBLISH }}
           # Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -108,27 +111,38 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_PUBLISH,MCP_TOKEN
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
           script: |
+            # MCP arguments first, so a bad setting fails before the running
+            # container is stopped.
+            set --
+            if [ "$DOCKER_NETWORK" = host ]; then
+              # No port publishing on the host network: MCP binds the host
+              # address itself, and MCP_ADDR takes a single address.
+              case "$MCP_PUBLISH" in
+                *,*) echo "MCP_PUBLISH: only one address with host networking" >&2; exit 1 ;;
+                ?*) set -- -e MCP_ADDR="$MCP_PUBLISH" -e MCP_TOKEN ;;
+              esac
+            else
+              # MCP listens on all interfaces inside the container; only the
+              # published host addresses are reachable from outside.
+              for addr in $(echo "$MCP_PUBLISH" | tr ',' ' '); do
+                set -- "$@" -p "$addr:8080"
+              done
+              if [ $# -gt 0 ]; then
+                set -- "$@" -e MCP_ADDR=:8080 -e MCP_TOKEN
+              fi
+            fi
+
             echo "Updating container..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             # The commit's own tag, not latest: deploys exactly this build.
             docker pull ghcr.io/salzy/homepoll:${{ github.sha }}
             docker stop homepoll-collector || true
             docker rm homepoll-collector || true
-            # MCP listens on all interfaces inside the container; only the
-            # published host addresses are reachable from outside.
-            set --
-            for addr in $(echo "$MCP_PUBLISH" | tr ',' ' '); do
-              set -- "$@" -p "$addr:8080"
-            done
-            if [ $# -gt 0 ]; then
-              set -- "$@" -e MCP_ADDR=:8080 -e MCP_TOKEN
-            fi
-            # Shared homelab network: Postgres is reachable as "postgres".
             docker run -d --name homepoll-collector \
               --restart unless-stopped \
-              --network homelab \
+              --network "$DOCKER_NETWORK" \
               -e POSTGRES_HOST \
               -e POSTGRES_PORT \
               -e POSTGRES_USER \

@@ -51,7 +51,7 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          platforms: linux/amd64
+          platforms: ${{ vars.PLATFORMS || 'linux/amd64' }}
           push: true
           tags: |
             ghcr.io/salzy/homepoll:latest
@@ -75,8 +75,8 @@ jobs:
       - name: Deploy Grafana files
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "grafana/provisioning,grafana/dashboards"
           target: ${{ vars.GRAFANA_PATH }}
@@ -93,8 +93,17 @@ jobs:
           ETA_HOST: ${{ vars.ETA_HOST }}
           ETA_PORT: ${{ vars.ETA_PORT }}
           POWER_HOST: ${{ vars.POWER_HOST }}
-          # Host network: bind to loopback or Tailscale only.
-          MCP_ADDR: ${{ vars.MCP_ADDR }}
+          # Docker network of the collector, e.g. a shared network where
+          # Postgres runs. "host" uses the host's network stack.
+          DOCKER_NETWORK: ${{ vars.DOCKER_NETWORK || 'host' }}
+          # Grafana as reachable from the deploy host, for the provisioning reload.
+          GRAFANA_URL: ${{ vars.GRAFANA_URL || 'http://localhost:3000' }}
+          # Grafana server admin; the provisioning reload requires one.
+          GRAFANA_USER: ${{ vars.GRAFANA_USER || 'admin' }}
+          # Comma-separated host addresses to serve MCP on, e.g.
+          # <tailscale-ip>:8080,<lan-ip>:8080 (only one with host networking).
+          # Trusted networks only, never 0.0.0.0. Empty disables MCP.
+          MCP_PUBLISH: ${{ vars.MCP_PUBLISH }}
           # Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POWER_TOKEN: ${{ secrets.POWER_TOKEN }}
@@ -103,11 +112,32 @@ jobs:
           GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
           MCP_TOKEN: ${{ secrets.MCP_TOKEN }}
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_PASSWORD,MCP_ADDR,MCP_TOKEN
+          envs: GHCR_TOKEN,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ETA_HOST,ETA_PORT,POWER_HOST,POWER_TOKEN,POWER_GPNR,POWER_ZP,GRAFANA_USER,GRAFANA_PASSWORD,GRAFANA_URL,DOCKER_NETWORK,MCP_PUBLISH,MCP_TOKEN
           script: |
+            # MCP arguments first, so a bad setting fails before the running
+            # container is stopped.
+            set --
+            if [ "$DOCKER_NETWORK" = host ]; then
+              # No port publishing on the host network: MCP binds the host
+              # address itself, and MCP_ADDR takes a single address.
+              case "$MCP_PUBLISH" in
+                *,*) echo "MCP_PUBLISH: only one address with host networking" >&2; exit 1 ;;
+                ?*) set -- -e MCP_ADDR="$MCP_PUBLISH" -e MCP_TOKEN ;;
+              esac
+            else
+              # MCP listens on all interfaces inside the container; only the
+              # published host addresses are reachable from outside.
+              for addr in $(echo "$MCP_PUBLISH" | tr ',' ' '); do
+                set -- "$@" -p "$addr:8080"
+              done
+              if [ $# -gt 0 ]; then
+                set -- "$@" -e MCP_ADDR=:8080 -e MCP_TOKEN
+              fi
+            fi
+
             echo "Updating container..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             # The commit's own tag, not latest: deploys exactly this build.
@@ -116,7 +146,7 @@ jobs:
             docker rm homepoll-collector || true
             docker run -d --name homepoll-collector \
               --restart unless-stopped \
-              --network host \
+              --network "$DOCKER_NETWORK" \
               -e POSTGRES_HOST \
               -e POSTGRES_PORT \
               -e POSTGRES_USER \
@@ -128,11 +158,15 @@ jobs:
               -e POWER_TOKEN \
               -e POWER_GPNR \
               -e POWER_ZP \
-              -e MCP_ADDR \
-              -e MCP_TOKEN \
+              "$@" \
               ghcr.io/salzy/homepoll:${{ github.sha }}
+
+            # Images are tagged per commit: remove all but the one just deployed.
+            docker images ghcr.io/salzy/homepoll --format '{{.Repository}}:{{.Tag}}' \
+              | grep -vxF "ghcr.io/salzy/homepoll:${{ github.sha }}" \
+              | xargs -r docker rmi || true
 
             # Dashboards hot-reload; datasources need an explicit reload.
             echo "Reloading Grafana provisioning..."
-            curl -fsS -X POST -u "admin:$GRAFANA_PASSWORD" \
-              http://localhost:3000/api/admin/provisioning/datasources/reload
+            curl -fsS -X POST -u "$GRAFANA_USER:$GRAFANA_PASSWORD" \
+              "$GRAFANA_URL/api/admin/provisioning/datasources/reload"

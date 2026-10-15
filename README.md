@@ -87,7 +87,7 @@ Read-only [MCP](https://modelcontextprotocol.io) access to the stored metrics, s
 | `list_metrics` | All metrics with module, description, unit, type, interval                                                      |
 | `query_metric` | Readings of one metric, newest first; optional `module`, `from` / `to` (RFC 3339), `limit` (default 1, max 500) |
 
-Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback or Tailscale, never `0.0.0.0` on an untrusted network.
+Bearer token required, requests with an `Origin` header refused. Plain HTTP: bind to loopback, Tailscale or a trusted LAN, never `0.0.0.0` on an untrusted network.
 
 ```bash
 MCP_ADDR=127.0.0.1:8080 MCP_TOKEN=$(openssl rand -hex 32) make dev
@@ -108,10 +108,11 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 
 ## CI/CD
 
-`.github/workflows/ci.yml`: test every push and PR; on `main`, build the `linux/amd64` image to GHCR and deploy over SSH via Tailscale.
+`.github/workflows/ci.yml`: test every push and PR; on `main`, build the image (`PLATFORMS`, default `linux/amd64`) to GHCR and deploy over SSH via Tailscale.
 
-- Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_ADDR`).
-- Variables: `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`); optional overrides `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `MCP_ADDR`.
+- Secrets: `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_PUBLISH`).
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `GRAFANA_URL` (default `http://localhost:3000`), `GRAFANA_USER` (Grafana server admin, default `admin`), `PLATFORMS`, `DOCKER_NETWORK` (default `host`), `MCP_PUBLISH` (comma-separated host addresses for MCP, e.g. `<tailscale-ip>:8080,<lan-ip>:8080`, only one with `host` networking; empty disables MCP).
+- The Grafana datasource reads `HOMEPOLL_DB_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_NAME` from Grafana's environment.
 
 ## License
 

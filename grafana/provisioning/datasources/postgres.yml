@@ -1,15 +1,17 @@
+# Reads HOMEPOLL_DB_* from Grafana's environment; prefixed so a shared
+# Grafana can provision datasources for several apps.
 apiVersion: 1
 datasources:
   - name: Homepoll
     uid: homepoll_pg
     type: postgres
     access: proxy
-    url: ${POSTGRES_HOST}:${POSTGRES_PORT}
-    user: ${POSTGRES_USER}
+    url: ${HOMEPOLL_DB_HOST}:${HOMEPOLL_DB_PORT}
+    user: ${HOMEPOLL_DB_USER}
     isDefault: true
     jsonData:
-      database: ${POSTGRES_DB}
+      database: ${HOMEPOLL_DB_NAME}
       sslmode: disable
       postgresVersion: 1800
     secureJsonData:
-      password: ${POSTGRES_PASSWORD}
+      password: ${HOMEPOLL_DB_PASSWORD}

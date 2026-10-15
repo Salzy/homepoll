@@ -23,11 +23,11 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-homepoll}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-homepoll}
-      POSTGRES_DB: ${POSTGRES_DB:-homepoll}
+      HOMEPOLL_DB_HOST: postgres
+      HOMEPOLL_DB_PORT: 5432
+      HOMEPOLL_DB_USER: ${POSTGRES_USER:-homepoll}
+      HOMEPOLL_DB_PASSWORD: ${POSTGRES_PASSWORD:-homepoll}
+      HOMEPOLL_DB_NAME: ${POSTGRES_DB:-homepoll}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/etc/grafana/dashboards

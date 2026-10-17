@@ -76,7 +76,8 @@ func TestListConfigurations(t *testing.T) {
 		name, module, typ, path string
 	}{
 		{"boiler_temperature", "HEATER", "numeric", "/264/10891/0/0/12161"},
-		{"boiler_mode", "HEATER", "text", "/264/10891/0/0/13414"},
+		{"boiler_mode", "HEATER", "text", "/264/10891/0/0/12000"},
+		{"heat_energy", "HEATER", "numeric", "/264/10891/14877/0/2273"},
 		{"requested_power", "HEATER", "numeric", "/264/10891/0/0/12077"},
 		{"electricity_consumption", "POWER", "numeric", "1-1:1.9.0"},
 	}

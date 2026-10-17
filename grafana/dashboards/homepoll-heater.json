@@ -356,6 +356,41 @@
           "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"%\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'buffer_charge' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
         }
       ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Heat output (kWh per hour = average kW)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'heat_energy' AND m.recorded_at > $__timeFrom()::timestamptz - interval '1 hour') SELECT $__timeGroupAlias(recorded_at, 1h), sum(delta) AS \"kWh\" FROM d WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1"
+        }
+      ]
     }
   ]
 }

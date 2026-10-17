@@ -48,6 +48,7 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 | Metric                                              | Module | Unit | Interval (s) |
 | --------------------------------------------------- | ------ | ---- | ------------ |
 | `total_consumption`                                 | HEATER | kg   | 900          |
+| `heat_energy`                                       | HEATER | kWh  | 900          |
 | `full_load_hours`                                   | HEATER | s    | 900          |
 | `heating_cycles`, `ignitions`, `buffer_load_cycles` | HEATER | -    | 900          |
 | `buffer_charge`                                     | HEATER | %    | 300          |
@@ -55,7 +56,6 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 | `boiler_mode` (text)                                | HEATER | -    | 60           |
 | `boiler_temperature`                                | HEATER | C    | 60           |
 | `boiler_pressure`                                   | HEATER | bar  | 60           |
-| `boiler_power` (gap while idle)                     | HEATER | kW   | 60           |
 | `requested_power` (0 while idle)                    | HEATER | kW   | 60           |
 | `exhaust_fan`                                       | HEATER | rpm  | 60           |
 | `electricity_consumption`                           | POWER  | kWh  | 86400        |

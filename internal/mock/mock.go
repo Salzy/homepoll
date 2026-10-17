@@ -49,8 +49,8 @@ func (m *Mock) Value(cfg db.Configuration) (string, error) {
 		return gauge(60, 80), nil
 	case "boiler_pressure":
 		return gauge(1.2, 1.8), nil
-	case "boiler_power":
-		return gauge(0, 9), nil
+	case "heat_energy":
+		return m.tick(cfg.Name, rand.Float64()*2), nil
 	case "buffer_charge":
 		return gauge(0, 100), nil
 	case "exhaust_fan":

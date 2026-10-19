@@ -116,4 +116,4 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 
 ## License
 
-Copyright (C) 2026 Philipp Brandauer. GPL v3, see [LICENSE](LICENSE).
+Copyright (C) 2026 Philipp Brandauer. AGPL v3, see [LICENSE](LICENSE).

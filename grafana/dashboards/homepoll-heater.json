@@ -93,7 +93,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at)), daily AS (SELECT date_trunc('day', recorded_at) AS day, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) AS kg FROM d GROUP BY 1) SELECT avg(kg) AS \"kg/day\" FROM daily"
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at)), daily AS (SELECT date_trunc('day', recorded_at, 'Europe/Vienna') AS day, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) AS kg FROM d GROUP BY 1) SELECT avg(kg) AS \"kg/day\" FROM daily"
         }
       ]
     },
@@ -189,7 +189,10 @@
         "defaults": {
           "unit": "currencyEUR",
           "custom": {
-            "drawStyle": "bars"
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "barWidthFactor": 0.9,
+            "fillOpacity": 80
           }
         }
       },
@@ -201,7 +204,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND $__timeFilter(m.recorded_at)) SELECT date_trunc('day', recorded_at) AS time, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) * ${kg_price} AS \"Cost (EUR)\" FROM d GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' AND m.recorded_at > date_trunc('day', $__timeFrom()::timestamptz, 'Europe/Vienna') - interval '1 hour' AND m.recorded_at <= $__timeTo()::timestamptz) SELECT date_trunc('day', recorded_at, 'Europe/Vienna') AS time, sum(CASE WHEN delta > 0 THEN delta ELSE 0 END) * ${kg_price} AS \"Cost (EUR)\" FROM d WHERE recorded_at >= date_trunc('day', $__timeFrom()::timestamptz, 'Europe/Vienna') GROUP BY 1 ORDER BY 1"
         }
       ]
     },
@@ -249,6 +252,35 @@
       "datasource": {
         "type": "postgres",
         "uid": "homepoll_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#808080"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "Heizen": { "color": "orange", "index": 0 },
+                "Bereit": { "color": "blue", "index": 1 },
+                "Zünden": { "color": "yellow", "index": 2 },
+                "Zuenden": { "color": "yellow", "index": 3 },
+                "Ausbrennen": { "color": "light-orange", "index": 4 },
+                "Entaschen": { "color": "purple", "index": 5 },
+                "Aus": { "color": "#808080", "index": 6 }
+              }
+            },
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^St(ö|oe)rung.*",
+                "result": { "color": "red", "index": 7 }
+              }
+            }
+          ]
+        }
       },
       "targets": [
         {
@@ -358,7 +390,7 @@
       ]
     },
     {
-      "id": 10,
+      "id": 11,
       "type": "timeseries",
       "title": "Heat output (kWh per hour = average kW)",
       "gridPos": {
@@ -375,8 +407,9 @@
         "defaults": {
           "unit": "kwatth",
           "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 80
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 15
           }
         }
       },

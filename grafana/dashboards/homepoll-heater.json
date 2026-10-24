@@ -56,7 +56,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT m.value_num AS kg FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'total_consumption' ORDER BY m.recorded_at DESC LIMIT 1"
+          "rawSql": "SELECT m.value_num AS kg FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'HEATER' AND name = 'total_consumption') ORDER BY m.recorded_at DESC LIMIT 1"
         }
       ]
     },
@@ -130,7 +130,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT m.value_num / 3600.0 AS hours FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'full_load_hours' ORDER BY m.recorded_at DESC LIMIT 1"
+          "rawSql": "SELECT m.value_num / 3600.0 AS hours FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'HEATER' AND name = 'full_load_hours') ORDER BY m.recorded_at DESC LIMIT 1"
         }
       ]
     },
@@ -167,7 +167,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT m.value_num AS ignitions FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'ignitions' ORDER BY m.recorded_at DESC LIMIT 1"
+          "rawSql": "SELECT m.value_num AS ignitions FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'HEATER' AND name = 'ignitions') ORDER BY m.recorded_at DESC LIMIT 1"
         }
       ]
     },

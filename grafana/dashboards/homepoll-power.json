@@ -26,7 +26,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Electricity consumed today (kWh)",
+      "title": "Electricity consumed yesterday (kWh)",
       "gridPos": {
         "h": 5,
         "w": 8,
@@ -56,14 +56,14 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT sum(m.value_num) AS kwh FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna')"
+          "rawSql": "SELECT sum(m.value_num) AS kwh FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna') - interval '1 day' AND m.recorded_at < date_trunc('day', now(), 'Europe/Vienna')"
         }
       ]
     },
     {
       "id": 2,
       "type": "stat",
-      "title": "Cost today (EUR)",
+      "title": "Cost yesterday (EUR)",
       "gridPos": {
         "h": 5,
         "w": 8,
@@ -93,7 +93,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT sum(m.value_num) * ${kwh_price} AS cost FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna')"
+          "rawSql": "SELECT sum(m.value_num) * ${kwh_price} AS cost FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna') - interval '1 day' AND m.recorded_at < date_trunc('day', now(), 'Europe/Vienna')"
         }
       ]
     },

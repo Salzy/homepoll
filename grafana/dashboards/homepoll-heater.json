@@ -425,7 +425,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'heat_energy' AND m.recorded_at > $__timeFrom()::timestamptz - interval '1 hour') SELECT $__timeGroupAlias(recorded_at, 1h), sum(delta) AS \"kWh\" FROM d WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH d AS (SELECT m.recorded_at, m.value_num - lag(m.value_num) OVER (ORDER BY m.recorded_at) AS delta FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'heat_energy' AND m.recorded_at > $__timeFrom()::timestamptz - interval '1 hour' AND m.recorded_at <= $__timeTo()::timestamptz) SELECT $__timeGroupAlias(recorded_at, 1h), sum(delta) AS \"kWh\" FROM d WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1"
         }
       ]
     }

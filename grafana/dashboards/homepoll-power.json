@@ -26,7 +26,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Electricity consumed today (kWh)",
+      "title": "Electricity consumed yesterday (kWh)",
       "gridPos": {
         "h": 5,
         "w": 8,
@@ -56,14 +56,14 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT sum(m.value_num) AS kwh FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'electricity_consumption' AND m.recorded_at >= date_trunc('day', now())"
+          "rawSql": "SELECT sum(m.value_num) AS kwh FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna') - interval '1 day' AND m.recorded_at < date_trunc('day', now(), 'Europe/Vienna')"
         }
       ]
     },
     {
       "id": 2,
       "type": "stat",
-      "title": "Cost today (EUR)",
+      "title": "Cost yesterday (EUR)",
       "gridPos": {
         "h": 5,
         "w": 8,
@@ -93,17 +93,18 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT sum(m.value_num) * ${kwh_price} AS cost FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'electricity_consumption' AND m.recorded_at >= date_trunc('day', now())"
+          "rawSql": "SELECT sum(m.value_num) * ${kwh_price} AS cost FROM metric m WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc('day', now(), 'Europe/Vienna') - interval '1 day' AND m.recorded_at < date_trunc('day', now(), 'Europe/Vienna')"
         }
       ]
     },
     {
       "id": 3,
-      "type": "timeseries",
-      "title": "Cost per day (EUR)",
+      "type": "table",
+      "title": "Consumption and cost per day / month",
+      "description": "One row per day; switches to one row per month when the time range is longer than 62 days.",
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 5
       },
@@ -113,55 +114,36 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
-          "custom": {
-            "drawStyle": "bars"
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Consumption (kWh)" },
+            "properties": [{ "id": "unit", "value": "kwatth" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Cost (EUR)" },
+            "properties": [{ "id": "unit", "value": "currencyEUR" }]
           }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": true,
+          "reducer": ["sum"],
+          "fields": ["Consumption (kWh)", "Cost (EUR)"]
         }
       },
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "datasource": {
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "SELECT date_trunc('day', m.recorded_at) AS time, sum(m.value_num) * ${kwh_price} AS \"Cost (EUR)\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'electricity_consumption' AND $__timeFilter(m.recorded_at) GROUP BY 1 ORDER BY 1"
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "type": "timeseries",
-      "title": "Consumption per day (kWh)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 5
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "homepoll_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatth",
-          "custom": {
-            "drawStyle": "bars"
-          }
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "time_series",
-          "datasource": {
-            "type": "postgres",
-            "uid": "homepoll_pg"
-          },
-          "rawSql": "SELECT date_trunc('day', m.recorded_at) AS time, sum(m.value_num) AS \"kWh\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'electricity_consumption' AND $__timeFilter(m.recorded_at) GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH p AS (SELECT CASE WHEN $__timeTo()::timestamptz - $__timeFrom()::timestamptz > interval '62 days' THEN 'month' ELSE 'day' END AS unit) SELECT to_char(date_trunc(p.unit, m.recorded_at, 'Europe/Vienna') AT TIME ZONE 'Europe/Vienna', CASE p.unit WHEN 'month' THEN 'YYYY-MM' ELSE 'YYYY-MM-DD' END) AS \"Period\", sum(m.value_num) AS \"Consumption (kWh)\", sum(m.value_num) * ${kwh_price} AS \"Cost (EUR)\" FROM metric m, p WHERE m.configuration_id = (SELECT id FROM configuration WHERE module = 'POWER' AND name = 'electricity_consumption') AND m.recorded_at >= date_trunc(p.unit, $__timeFrom()::timestamptz, 'Europe/Vienna') AND m.recorded_at <= $__timeTo()::timestamptz GROUP BY 1 ORDER BY 1"
         }
       ]
     },

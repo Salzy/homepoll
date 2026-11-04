@@ -346,7 +346,32 @@
       "fieldConfig": {
         "defaults": {
           "unit": "celsius"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
@@ -357,6 +382,15 @@
             "uid": "homepoll_pg"
           },
           "rawSql": "SELECT m.recorded_at AS time, m.value_num AS \"C\" FROM metric m JOIN configuration c ON c.id = m.configuration_id WHERE c.name = 'outside_temperature' AND $__timeFilter(m.recorded_at) ORDER BY m.recorded_at"
+        },
+        {
+          "refId": "B",
+          "format": "time_series",
+          "datasource": {
+            "type": "postgres",
+            "uid": "homepoll_pg"
+          },
+          "rawSql": "WITH bucket AS (SELECT $__unixEpochFrom()::double precision AS range_start, greatest(($__unixEpochTo() - $__unixEpochFrom()) / 48.0, 1) AS width) SELECT to_timestamp(bucket.range_start + (floor((extract(epoch FROM m.recorded_at) - bucket.range_start) / bucket.width) + 0.5) * bucket.width) AS time, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.value_num) AS \"Median\" FROM metric m JOIN configuration c ON c.id = m.configuration_id CROSS JOIN bucket WHERE c.name = 'outside_temperature' AND $__timeFilter(m.recorded_at) GROUP BY 1 ORDER BY 1"
         }
       ]
     },

@@ -359,6 +359,10 @@
                 "value": 2
               },
               {
+                "id": "custom.lineInterpolation",
+                "value": "smooth"
+              },
+              {
                 "id": "custom.showPoints",
                 "value": "never"
               },
@@ -390,7 +394,7 @@
             "type": "postgres",
             "uid": "homepoll_pg"
           },
-          "rawSql": "WITH bucket AS (SELECT $__unixEpochFrom()::double precision AS range_start, greatest(($__unixEpochTo() - $__unixEpochFrom()) / 48.0, 1) AS width) SELECT to_timestamp(bucket.range_start + (floor((extract(epoch FROM m.recorded_at) - bucket.range_start) / bucket.width) + 0.5) * bucket.width) AS time, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.value_num) AS \"Median\" FROM metric m JOIN configuration c ON c.id = m.configuration_id CROSS JOIN bucket WHERE c.name = 'outside_temperature' AND $__timeFilter(m.recorded_at) GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH bucket AS (SELECT $__unixEpochFrom()::double precision AS range_start, greatest(($__unixEpochTo() - $__unixEpochFrom()) / 12.0, 1) AS width) SELECT to_timestamp(bucket.range_start + (floor((extract(epoch FROM m.recorded_at) - bucket.range_start) / bucket.width) + 0.5) * bucket.width) AS time, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.value_num) AS \"Median\" FROM metric m JOIN configuration c ON c.id = m.configuration_id CROSS JOIN bucket WHERE c.name = 'outside_temperature' AND $__timeFilter(m.recorded_at) GROUP BY 1 ORDER BY 1"
         }
       ]
     },

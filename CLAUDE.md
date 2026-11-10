@@ -32,4 +32,4 @@ Modular home metrics collector (Go 1.27.3, PostgreSQL 18, Grafana). Usage, modul
 - HTTP MCP (`MCP_ADDR`) is the only network surface: bearer token (`subtle.ConstantTimeCompare`), `Origin` header refused, body capped, plain HTTP behind loopback/Tailscale. Do not relax any of this.
 - Tests: unit tests colocated (`_test.go`); `make test` = unit only, `make test-all` = plus integration.
 - `make lint` (`.golangci.yml`) must pass; CI enforces it. `//nolint` needs a specific linter and a reason.
-- GitHub Actions are pinned to full commit SHAs with a `# vN` comment. Never replace with a bare tag.
+- GitHub Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment naming the exact release. Never replace with a bare tag.

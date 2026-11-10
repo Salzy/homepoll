@@ -5,7 +5,8 @@ package mcp
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,17 +35,18 @@ var errMethodNotFound = errors.New("method not found")
 
 // request is an incoming JSON-RPC message; no ID means a notification (no reply).
 type request struct {
-	ID     json.RawMessage `json:"id"`
-	Params json.RawMessage `json:"params"`
-	Method string          `json:"method"`
+	ID     jsontext.Value `json:"id"`
+	Params jsontext.Value `json:"params"`
+	Method string         `json:"method"`
 }
 
 // response is an outgoing JSON-RPC message; exactly one of Result and Error is set.
+// omitzero, not omitempty: v2 omitempty would drop an empty result such as ping's {}.
 type response struct {
-	ID      json.RawMessage `json:"id"`
-	Result  any             `json:"result,omitempty"`
-	Error   *rpcError       `json:"error,omitempty"`
-	JSONRPC string          `json:"jsonrpc"`
+	ID      jsontext.Value `json:"id"`
+	Result  any            `json:"result,omitzero"`
+	Error   *rpcError      `json:"error,omitzero"`
+	JSONRPC string         `json:"jsonrpc"`
 }
 
 // rpcError is the JSON-RPC error object.
@@ -91,7 +93,7 @@ func dispatch(ctx context.Context, q *db.Queries, req request) (any, error) {
 
 // initialize answers the handshake, echoing the client's protocol version.
 // ponytail: echo the client's version; revisit if a tool needs a newer revision.
-func initialize(params json.RawMessage) any {
+func initialize(params jsontext.Value) any {
 	var p struct {
 		ProtocolVersion string `json:"protocolVersion"`
 	}
@@ -107,7 +109,7 @@ func initialize(params json.RawMessage) any {
 }
 
 // toolsJSON is the tools/list payload; its descriptions are the model's only docs.
-var toolsJSON = json.RawMessage(`[
+var toolsJSON = jsontext.Value(`[
   {
     "name": "list_metrics",
     "description": "List every metric homepoll collects, with its module, name, description, unit, value type and poll interval. Call this first to find the exact metric name to pass to query_metric.",
@@ -132,10 +134,10 @@ var toolsJSON = json.RawMessage(`[
 
 // callTool runs one tool. Bad arguments come back as isError content so the
 // model can correct itself; only a malformed call is a protocol error.
-func callTool(ctx context.Context, q *db.Queries, params json.RawMessage) (any, error) {
+func callTool(ctx context.Context, q *db.Queries, params jsontext.Value) (any, error) {
 	var p struct {
-		Arguments json.RawMessage `json:"arguments"`
-		Name      string          `json:"name"`
+		Arguments jsontext.Value `json:"arguments"`
+		Name      string         `json:"name"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, fmt.Errorf("tools/call: %w", err)
@@ -157,7 +159,7 @@ func callTool(ctx context.Context, q *db.Queries, params json.RawMessage) (any, 
 		return textResult(err.Error(), true), nil
 	}
 
-	body, err := json.MarshalIndent(payload, "", "  ")
+	body, err := json.Marshal(payload, jsontext.WithIndent("  "))
 	if err != nil {
 		return nil, fmt.Errorf("encode %s result: %w", p.Name, err)
 	}
@@ -227,7 +229,7 @@ type queryResult struct {
 }
 
 // queryMetric resolves the named metric and returns its readings, newest first.
-func queryMetric(ctx context.Context, q *db.Queries, args json.RawMessage) (any, error) {
+func queryMetric(ctx context.Context, q *db.Queries, args jsontext.Value) (any, error) {
 	var a queryArgs
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, fmt.Errorf("could not read the arguments: %v", err)

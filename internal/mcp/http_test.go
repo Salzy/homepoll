@@ -1,7 +1,7 @@
 package mcp
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -107,8 +107,43 @@ func TestHandlerRequests(t *testing.T) {
 		}
 	})
 
+	t.Run("should send an empty result for ping instead of omitting it", func(t *testing.T) {
+		w := send(http.MethodPost, `{"jsonrpc":"2.0","id":7,"method":"ping"}`, bearer())
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		if got, want := w.Body.String(), `{"id":7,"result":{},"jsonrpc":"2.0"}`; got != want {
+			t.Errorf("body = %s, want %s", got, want)
+		}
+	})
+
+	t.Run("should send only the error for an unknown method", func(t *testing.T) {
+		w := send(http.MethodPost, `{"jsonrpc":"2.0","id":8,"method":"resources/list"}`, bearer())
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if _, ok := resp["result"]; ok {
+			t.Errorf("response %s carries a result next to the error", w.Body.String())
+		}
+		if _, ok := resp["error"]; !ok {
+			t.Errorf("response %s has no error", w.Body.String())
+		}
+	})
+
 	t.Run("should reject a malformed body", func(t *testing.T) {
 		w := send(http.MethodPost, "not json", bearer())
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("should reject a request with a duplicate member", func(t *testing.T) {
+		w := send(
+			http.MethodPost,
+			`{"jsonrpc":"2.0","id":1,"method":"ping","method":"tools/list"}`,
+			bearer(),
+		)
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}

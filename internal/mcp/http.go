@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"crypto/subtle"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"strings"
 
@@ -39,7 +39,7 @@ func Handler(q *db.Queries, token string) http.Handler {
 
 		var req request
 		body := http.MaxBytesReader(w, r.Body, maxRequestBytes)
-		if err := json.NewDecoder(body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(body, &req); err != nil {
 			http.Error(w, "malformed JSON-RPC request", http.StatusBadRequest)
 			return
 		}
@@ -50,7 +50,7 @@ func Handler(q *db.Queries, token string) http.Handler {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(answer(r.Context(), q, req))
+		_ = json.MarshalWrite(w, answer(r.Context(), q, req))
 	})
 	return mux
 }

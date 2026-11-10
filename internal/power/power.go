@@ -5,7 +5,7 @@ package power
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,7 +75,7 @@ func Fetch(
 	}
 
 	var records []profileRecord
-	if err := json.NewDecoder(resp.Body).Decode(&records); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &records); err != nil {
 		return nil, fmt.Errorf("power: decode response: %w", err)
 	}
 	return readings(records)

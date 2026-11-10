@@ -1,3 +1,4 @@
+// Package eta fetches heater values from the ETA boiler REST API.
 package eta
 
 import (
@@ -59,7 +60,7 @@ func Fetcher(baseURL string) collector.Fetch {
 // Fetch reads a single variable from the ETAtouch REST API and decodes it.
 func Fetch(ctx context.Context, baseURL, path string) (Value, error) {
 	target := baseURL + "/user/var" + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return Value{}, err
 	}

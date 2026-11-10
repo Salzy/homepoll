@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"math"
 	"os"
 	"testing"
@@ -31,10 +32,15 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Skipf("no database: %v", err)
 	}
-	if err := sqlDB.Ping(); err != nil {
+	if err := sqlDB.PingContext(context.Background()); err != nil {
 		sqlDB.Close()
 		t.Skipf("database not reachable (%s): %v", dsn, err)
 	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("close database: %v", err)
+		}
+	})
 	goose.SetBaseFS(db.MigrationsFS)
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatalf("goose dialect: %v", err)
@@ -45,10 +51,26 @@ func openTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
+// beginTx starts a transaction that is rolled back when the test ends, so
+// nothing a test writes persists. It runs before openTestDB closes the database
+// because cleanups run in reverse order.
+func beginTx(ctx context.Context, t *testing.T, sqlDB *sql.DB) *sql.Tx {
+	t.Helper()
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Errorf("rollback: %v", err)
+		}
+	})
+	return tx
+}
+
 // TestListConfigurations guards the Configuration scan against schema drift.
 func TestListConfigurations(t *testing.T) {
 	sqlDB := openTestDB(t)
-	defer sqlDB.Close()
 
 	configs, err := db.New(sqlDB).ListConfigurations(context.Background())
 	if err != nil {
@@ -99,17 +121,13 @@ func TestListConfigurations(t *testing.T) {
 // TestBatchInsertManyRows runs the multi-row INSERT against real Postgres.
 func TestBatchInsertManyRows(t *testing.T) {
 	sqlDB := openTestDB(t)
-	defer sqlDB.Close()
 
 	ctx := context.Background()
-	tx, err := sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer tx.Rollback()
+	tx := beginTx(ctx, t, sqlDB)
 
 	var configID int32
-	if err := tx.QueryRowContext(ctx, "SELECT id FROM configuration LIMIT 1").Scan(&configID); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM configuration LIMIT 1").
+		Scan(&configID); err != nil {
 		t.Fatalf("need at least one seeded configuration: %v", err)
 	}
 
@@ -133,7 +151,7 @@ func TestBatchInsertManyRows(t *testing.T) {
 
 	var count int
 	var sum float64
-	err = tx.QueryRowContext(
+	err := tx.QueryRowContext(
 		ctx,
 		"SELECT count(*), coalesce(sum(value_num), 0) FROM metric WHERE configuration_id = $1 AND recorded_at BETWEEN $2 AND $3",
 		configID,
@@ -154,17 +172,13 @@ func TestBatchInsertManyRows(t *testing.T) {
 // TestMetricDedup checks re-inserting the same instant is a no-op. Rolled back.
 func TestMetricDedup(t *testing.T) {
 	sqlDB := openTestDB(t)
-	defer sqlDB.Close()
 
 	ctx := context.Background()
-	tx, err := sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer tx.Rollback()
+	tx := beginTx(ctx, t, sqlDB)
 
 	var configID int32
-	if err := tx.QueryRowContext(ctx, "SELECT id FROM configuration LIMIT 1").Scan(&configID); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM configuration LIMIT 1").
+		Scan(&configID); err != nil {
 		t.Fatalf("need at least one seeded configuration: %v", err)
 	}
 
@@ -188,7 +202,7 @@ func TestMetricDedup(t *testing.T) {
 
 	var count int
 	var stored float64
-	err = tx.QueryRowContext(
+	err := tx.QueryRowContext(
 		ctx,
 		"SELECT count(*), max(value_num) FROM metric WHERE configuration_id = $1 AND recorded_at = $2",
 		configID,
@@ -212,14 +226,9 @@ func TestMetricDedup(t *testing.T) {
 // Rolled back.
 func TestListReadings(t *testing.T) {
 	sqlDB := openTestDB(t)
-	defer sqlDB.Close()
 
 	ctx := context.Background()
-	tx, err := sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer tx.Rollback()
+	tx := beginTx(ctx, t, sqlDB)
 
 	q := db.New(tx)
 	configs, err := q.ListConfigurations(ctx)
@@ -329,17 +338,15 @@ func TestListReadings(t *testing.T) {
 // TestConfigurationTypeCheck checks the database rejects an unknown type. Rolled back.
 func TestConfigurationTypeCheck(t *testing.T) {
 	sqlDB := openTestDB(t)
-	defer sqlDB.Close()
 
 	ctx := context.Background()
-	tx, err := sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer tx.Rollback()
+	tx := beginTx(ctx, t, sqlDB)
 
-	_, err = tx.ExecContext(ctx, `INSERT INTO configuration (module, name, path, type, poll_interval)
-VALUES ('HEATER', 'type_check_probe', '/x', 'numerc', 60)`)
+	_, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO configuration (module, name, path, type, poll_interval)
+VALUES ('HEATER', 'type_check_probe', '/x', 'numerc', 60)`,
+	)
 	if err == nil {
 		t.Error("inserted a configuration with type 'numerc', want a CHECK violation")
 	}

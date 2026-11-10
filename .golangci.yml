@@ -1,0 +1,65 @@
+version: "2"
+
+linters:
+  # standard set: errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose # HTTP response bodies are closed
+    - contextcheck # contexts are passed down, not replaced
+    - durationcheck # no multiplied time.Duration values
+    - errorlint # wrapped errors compared with errors.Is / errors.As
+    - exhaustive # switches on enums cover every value
+    - gocritic # diagnostics, style and performance checks
+    - gosec # security checks
+    - misspell # typos in comments and strings
+    - nilerr # no nil returned after a non-nil error check
+    - noctx # outgoing HTTP requests and SQL queries take a context
+    - nolintlint # //nolint directives are specific and explained
+    - revive # successor of golint
+    - rowserrcheck # sql.Rows.Err is checked
+    - sqlclosecheck # sql.Rows and sql.Stmt are closed
+    - unconvert # no unnecessary type conversions
+    - unparam # no unused function parameters or results
+    - usestdlibvars # http.MethodGet etc. instead of literals
+    - wastedassign # no assignments that are never read
+  settings:
+    exhaustive:
+      # a default case counts as covering the remaining values
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        # values over pointers on purpose: small structs, no shared mutation
+        - hugeParam
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # tests may use fixed credentials, unchecked casts and similar shortcuts
+      - path: _test\.go
+        linters:
+          - gosec
+      # mock data, not security-sensitive
+      - path: internal/mock/
+        text: G404
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - golines
+  settings:
+    golines:
+      max-len: 100
+
+run:
+  # integration tests live behind the default build, so lint them too
+  tests: true

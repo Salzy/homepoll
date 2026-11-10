@@ -232,7 +232,7 @@ type queryResult struct {
 func queryMetric(ctx context.Context, q *db.Queries, args jsontext.Value) (any, error) {
 	var a queryArgs
 	if err := json.Unmarshal(args, &a); err != nil {
-		return nil, fmt.Errorf("could not read the arguments: %v", err)
+		return nil, fmt.Errorf("could not read the arguments: %w", err)
 	}
 	from, err := parseBound(a.From, "from")
 	if err != nil {

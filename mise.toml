@@ -1,5 +1,6 @@
 [tools]
 go = "1.27.3"
 air = "1.67.4"
-golines = "0.13.0"
 "aqua:pressly/goose" = "3.28.0"
+golangci-lint = "2.15.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"

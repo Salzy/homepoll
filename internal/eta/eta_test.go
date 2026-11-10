@@ -22,9 +22,10 @@ func TestFetch(t *testing.T) {
 		if r.URL.Path != "/user/var"+path {
 			t.Errorf("requested path = %q, want %q", r.URL.Path, "/user/var"+path)
 		}
-		w.Write(
-			[]byte(valueXML(`strValue="25" scaleFactor="1" unit="°C" decPlaces="0"`, "25.4141")),
-		)
+		body := valueXML(`strValue="25" scaleFactor="1" unit="°C" decPlaces="0"`, "25.4141")
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -132,7 +133,9 @@ func TestFetcher(t *testing.T) {
 		if !ok {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
-		w.Write([]byte(body))
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 	fetch := Fetcher(srv.URL)

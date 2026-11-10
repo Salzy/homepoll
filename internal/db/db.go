@@ -12,7 +12,7 @@ import (
 
 // DBTX is satisfied by *sql.DB, *sql.Tx (integration tests roll back) and test
 // fakes.
-type DBTX interface {
+type DBTX interface { //nolint:revive // the conventional name; TX alone would hide that *sql.DB fits too
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }

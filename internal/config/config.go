@@ -1,3 +1,4 @@
+// Package config loads the collector settings from environment variables.
 package config
 
 import (

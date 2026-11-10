@@ -1,3 +1,5 @@
+// Package collector groups metrics by poll interval, fetches them through each
+// module's Fetch, and batch-inserts the readings.
 package collector
 
 import (

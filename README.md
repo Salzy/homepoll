@@ -11,7 +11,7 @@ Salzburg Netz (HTTPS/JSON) --->        |
 ## Quick start
 
 ```bash
-mise install           # Go + air, golines, goose (mise.toml)
+mise install           # Go + air, goose, golangci-lint, govulncheck (mise.toml)
 make up                # PostgreSQL + Grafana
 DRY_RUN=true make dev  # mock data, no external systems
 ```
@@ -27,11 +27,11 @@ Grafana: http://localhost:3000 (`admin` / `GRAFANA_PASSWORD`, default `admin`).
 
 ## Modules
 
-| Module   | System                   | Fetch                                                                | Docs                                                                                                                                    |
-| -------- | ------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `HEATER` | ETA ePE 9kW (ETAtouch)   | `GET /user/var<path>`, one value per call                            | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0)                    |
+| Module   | System                   | Fetch                                                               | Docs                                                                                                                                    |
+| -------- | ------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEATER` | ETA ePE 9kW (ETAtouch)   | `GET /user/var<path>`, one value per call                           | [ETAtouch REST API](https://www.meineta.at/javax.faces.resource/downloads/ETA-RESTful-v1.2.pdf.xhtml?ln=default&v=0)                    |
 | `POWER`  | Salzburg Netz grid meter | `POST /api/v1/profile`, last 7 days of 15-minute samples once a day | [API description](https://www.salzburgnetz.at/content/dam/salzburgnetz/dokumente/service/Programmierschnittstelle_Beschreibung_API.pdf) |
-| `MOCK`   | -                        | `DRY_RUN=true` replaces every module with random values              | -                                                                                                                                       |
+| `MOCK`   | -                        | `DRY_RUN=true` replaces every module with random values             | -                                                                                                                                       |
 
 **HEATER**
 
@@ -101,14 +101,15 @@ claude mcp add --transport http homepoll http://127.0.0.1:8080/mcp \
 | ------------------------------ | -------------------------------------------------------------------------------- |
 | `make dev` / `make build`      | Live reload (air, loads `.env`) / build once                                     |
 | `make test` / `make test-all`  | Unit tests / plus DB integration tests (needs `make up`, or `TEST_DATABASE_URL`) |
-| `make fmt`                     | gofmt + wrap at 100 columns                                                      |
+| `make lint` / `make vuln`      | golangci-lint (`.golangci.yml`, includes the format check) / govulncheck         |
+| `make fmt`                     | gofmt + goimports + wrap at 100 columns                                          |
 | `make migrate-create NAME=...` | New goose migration                                                              |
 | `make up` / `make down`        | Local PostgreSQL + Grafana                                                       |
 | `make docker`                  | Container image (`IMAGE=name:tag`)                                               |
 
 ## CI/CD
 
-`.github/workflows/ci.yml`: test every push and PR; on `main`, build the image (`PLATFORMS`, default `linux/amd64`) to GHCR and deploy over SSH via Tailscale.
+`.github/workflows/ci.yml`: lint, govulncheck and test every push and PR; on `main`, build the image (`PLATFORMS`, default `linux/amd64`) to GHCR and deploy over SSH via Tailscale. `.github/workflows/codeql.yml`: CodeQL security and quality scan on every push, PR, and weekly; findings appear under the repository's Security tab.
 
 - Secrets: `DEPLOY_SSH_KEY`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD`, `POWER_TOKEN`, `POWER_GPNR`, `POWER_ZP`, `MCP_TOKEN` (only with `MCP_PUBLISH`).
 - Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `GRAFANA_PATH` (host dir with `provisioning/` and `dashboards/`, mounted by the host's Grafana), `POSTGRES_HOST=postgres`; optional `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `ETA_HOST`, `ETA_PORT`, `POWER_HOST`, `GRAFANA_URL` (default `http://localhost:3000`), `GRAFANA_USER` (Grafana server admin, default `admin`), `PLATFORMS`, `DOCKER_NETWORK` (default `host`), `MCP_PUBLISH` (comma-separated host addresses for MCP, e.g. `<tailscale-ip>:8080,<lan-ip>:8080`, only one with `host` networking; empty disables MCP).

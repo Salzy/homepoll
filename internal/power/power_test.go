@@ -39,10 +39,17 @@ func TestFetch(t *testing.T) {
 	var gotBody map[string]string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth, gotMethod, gotPath = r.Header.Get("Authorization"), r.Method, r.URL.Path
-		raw, _ := io.ReadAll(r.Body)
-		json.Unmarshal(raw, &gotBody)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		if err := json.Unmarshal(raw, &gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
 		w.WriteHeader(http.StatusCreated) // API returns 201, not 200
-		w.Write([]byte(responseBody))
+		if _, err := w.Write([]byte(responseBody)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -63,7 +70,11 @@ func TestFetch(t *testing.T) {
 		t.Errorf("Authorization = %q", gotAuth)
 	}
 	want := map[string]string{
-		"GPNR": "10745740", "ZP": "AT00ZP", "AB": "2026-06-14", "BIS": "2026-06-21", "FORMAT": "json",
+		"GPNR":   "10745740",
+		"ZP":     "AT00ZP",
+		"AB":     "2026-06-14",
+		"BIS":    "2026-06-21",
+		"FORMAT": "json",
 	}
 	for k, v := range want {
 		if gotBody[k] != v {

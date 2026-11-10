@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,9 @@ const initializeBody = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
 
 // send runs one request against the handler; nil headers sends none.
 func send(method, body string, headers map[string]string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, Path, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(
+		context.Background(), method, Path, strings.NewReader(body),
+	)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

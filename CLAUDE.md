@@ -5,7 +5,7 @@ Modular home metrics collector (Go 1.27.3, PostgreSQL 18, Grafana). Usage, modul
 ## Stack
 
 - Go standard library for HTTP, XML/JSON, scheduling, config; hand-written `database/sql`; `goose` migrations.
-- `mise.toml` pins Go and the dev tools (`air`, `golines`, `goose`); the `Makefile` calls them directly.
+- `mise.toml` pins Go and the dev tools (`air`, `goose`, `golangci-lint`, `govulncheck`); the `Makefile` calls them directly.
 - Distroless Docker image, Docker Compose for local dependencies, GitHub Actions for CI/CD.
 
 ## Layout
@@ -31,4 +31,5 @@ Modular home metrics collector (Go 1.27.3, PostgreSQL 18, Grafana). Usage, modul
 - MCP runs inside the collector, read-only, no SDK. Add methods/tools in `dispatch` (`mcp.go`).
 - HTTP MCP (`MCP_ADDR`) is the only network surface: bearer token (`subtle.ConstantTimeCompare`), `Origin` header refused, body capped, plain HTTP behind loopback/Tailscale. Do not relax any of this.
 - Tests: unit tests colocated (`_test.go`); `make test` = unit only, `make test-all` = plus integration.
+- `make lint` (`.golangci.yml`) must pass; CI enforces it. `//nolint` needs a specific linter and a reason.
 - GitHub Actions are pinned to full commit SHAs with a `# vN` comment. Never replace with a bare tag.

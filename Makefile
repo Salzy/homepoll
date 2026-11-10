@@ -1,4 +1,4 @@
-.PHONY: dev build docker test test-all fmt tidy migrate-create up down
+.PHONY: dev build docker test test-all lint vuln fmt tidy migrate-create up down
 
 .DEFAULT_GOAL := build
 
@@ -19,8 +19,14 @@ test: ## unit tests only (integration tests skip via -short)
 test-all: ## full suite: unit + DB-backed integration tests (needs `make up`)
 	go test ./...
 
-fmt: ## gofmt + wrap lines at 100 (golines)
-	golines -w -m 100 .
+lint: ## static analysis + formatting check (.golangci.yml)
+	golangci-lint run ./...
+
+vuln: ## known vulnerabilities in reachable code (govulncheck)
+	govulncheck ./...
+
+fmt: ## gofmt + goimports + wrap lines at 100 (.golangci.yml formatters)
+	golangci-lint fmt ./...
 
 tidy:
 	go mod tidy

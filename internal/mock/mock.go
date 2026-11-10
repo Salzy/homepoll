@@ -1,3 +1,5 @@
+// Package mock generates plausible readings for every module when DRY_RUN=true,
+// so the collector runs without contacting any external system.
 package mock
 
 import (

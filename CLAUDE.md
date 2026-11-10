@@ -1,6 +1,6 @@
 # Homepoll
 
-Modular home metrics collector (Go 1.27.1, PostgreSQL 18, Grafana). Usage, modules, env vars and make targets: see `README.md`.
+Modular home metrics collector (Go 1.27.3, PostgreSQL 18, Grafana). Usage, modules, env vars and make targets: see `README.md`.
 
 ## Stack
 
